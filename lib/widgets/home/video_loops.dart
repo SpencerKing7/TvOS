@@ -41,25 +41,41 @@ const _timelapse = 0.35;
 /// desert, light) so similar scenes never follow each other; every clip shows once
 /// before any repeats.
 const videoClips = [
-  VideoClip('28042235/12290181_1920_1080_30fps.mp4'), // clouds: over the clouds
-  VideoClip('13180793/13180793-hd_1920_1080_30fps.mp4'), // mountains: dense fog over green mountains
-  VideoClip('30770305/13162097_1920_1080_30fps.mp4'), // forest: misty rainforest from above
-  VideoClip('12742754/12742754-hd_1920_1080_30fps.mp4'), // light: sun through mountain haze
+  VideoClip('12428587/12428587-hd_1920_1080_30fps.mp4'), // water: sunrise over a misty river
   VideoClip('6341893/6341893-hd_1920_1080_25fps.mp4'), // mountains: clouds rolling over ridges
-  VideoClip('10550175/10550175-hd_1920_1080_30fps.mp4'), // forest: fog over a forest
-  VideoClip('39847965/16998539_1920_1080_30fps.mp4', _timelapse), // desert: sunset timelapse
+  VideoClip('10979134/10979134-hd_1920_1080_30fps.mp4'), // water: bare trees reflected at dusk
+  VideoClip('13180793/13180793-hd_1920_1080_30fps.mp4'), // mountains: dense fog over green mountains
+  VideoClip('12742754/12742754-hd_1920_1080_30fps.mp4'), // light: sun through mountain haze
   VideoClip('35763506/15162498_1920_1080_30fps.mp4'), // mountains: snowy peaks
+  VideoClip('13260160/13260160-hd_1920_1080_24fps.mp4'), // water: lily pads on a still lake
   VideoClip('34470558/14606043_1920_1080_30fps.mp4'), // clouds: sunrise over a sea of clouds
-  VideoClip('12228649/12228649-hd_1920_1080_30fps.mp4'), // forest: clouds over a forest
+  VideoClip('30770305/13162097_1920_1080_30fps.mp4'), // forest: misty rainforest from above
   VideoClip('31579321/13458108_1920_1080_30fps.mp4'), // mountains: fog over Yangmingshan
-  VideoClip('17207185/17207185-hd_1920_1080_24fps.mp4'), // desert: badlands
   VideoClip('33354461/14202812_1920_1080_30fps.mp4'), // light: mountain sunrise
-  VideoClip('28042090/12290191_1920_1080_30fps.mp4'), // clouds: above a cloud-covered mountain
-  VideoClip('12858363/12858363-hd_1920_1080_30fps.mp4'), // mountains: fog and white clouds over peaks
+  VideoClip('14067717/14067717-hd_1920_1080_30fps.mp4'), // water: mist on a lake below trees
   VideoClip('1722697/1722697-hd_1920_1080_25fps.mp4'), // light: mountain silhouettes
+  VideoClip('28042235/12290181_1920_1080_30fps.mp4'), // clouds: over the clouds
+  VideoClip('12858363/12858363-hd_1920_1080_30fps.mp4'), // mountains: fog and white clouds over peaks
+  VideoClip('10550175/10550175-hd_1920_1080_30fps.mp4'), // forest: fog over a forest
+  VideoClip('31640623/13480278_1920_1080_30fps.mp4'), // water: branches on a blue lake
+  VideoClip('28042090/12290191_1920_1080_30fps.mp4'), // clouds: above a cloud-covered mountain
   VideoClip('6965877/6965877-hd_1920_1080_30fps.mp4'), // mountains: mist on a mountainside
-  VideoClip('13141644/13141644-hd_1920_1080_30fps.mp4'), // clouds: over a mountain
+  VideoClip('12228649/12228649-hd_1920_1080_30fps.mp4'), // forest: clouds over a forest
   VideoClip('3926075/3926075-hd_1920_1080_24fps.mp4', _timelapse), // light: sunrise timelapse over hills
+  VideoClip('14081267/14081267-hd_1920_1080_30fps.mp4'), // water: mist rising off a pond
+  VideoClip('13141644/13141644-hd_1920_1080_30fps.mp4'), // clouds: over a mountain
+  VideoClip('14386778/14386778-hd_1920_1080_24fps.mp4'), // forest: fog among tall trees
+  VideoClip('6527107/6527107-hd_1920_1080_25fps.mp4'), // mountains: moon setting over snowy peaks
+  VideoClip('2915385/2915385-hd_1920_1080_25fps.mp4'), // water: open sea to the horizon
+  VideoClip('6341892/6341892-hd_1920_1080_25fps.mp4'), // mountains: low cloud on a wooded mountain
+  VideoClip('9244200/9244200-hd_1920_1080_30fps.mp4'), // light: sun setting behind a ridge
+  VideoClip('34742448/14728553_1920_1080_24fps.mp4'), // water: river at sunset
+  VideoClip('12995004/12995004-hd_1920_1080_30fps.mp4'), // forest: fog drifting through a wooded valley
+  VideoClip('13280337/13280337-hd_1920_1080_30fps.mp4'), // clouds: sun over a sea of clouds
+  VideoClip('28647793/12442332_1920_1080_30fps.mp4'), // water: misty forest river at dawn
+  VideoClip('39847965/16998539_1920_1080_30fps.mp4', _timelapse), // desert: sunset timelapse
+  VideoClip('10221670/10221670-hd_1920_1080_30fps.mp4'), // light: sunset rays over a treeline
+  VideoClip('17207185/17207185-hd_1920_1080_24fps.mp4'), // desert: badlands
 ];
 
 /// True once a clip is on screen, so the background can stop drawing what it covers.
