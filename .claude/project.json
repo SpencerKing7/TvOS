@@ -1,5 +1,6 @@
 {
   "name": "TvOS",
   "defaultBranch": "main",
+  "linearProject": "TvOS",
   "verify": "scripts/verify.sh"
 }

@@ -23,8 +23,16 @@ class Landscape {
   const Landscape(this.file, this.place, this.author);
 }
 
+/// Shown in this order (from a random start), so similar scenes never follow each other.
 const landscapes = [
+  Landscape('01.jpg', 'Lake Louise, Canada', 'Chensiyuan'),
+  Landscape('07.jpg', 'Dune du Pilat, France', 'Jörg Braukmann'),
+  Landscape('03.jpg', 'Austnesfjorden, Lofoten', 'Ximonic (Simo Räsänen)'),
+  Landscape('09.jpg', 'Dzukou Valley, India', 'Samudra Bikash Hazarika'),
+  Landscape('04.jpg', 'Ai-Petri, Crimea', 'Dmytro Balkhovitin'),
+  Landscape('08.jpg', 'Mekong, Laos', 'Basile Morin'),
   Landscape('05.jpg', 'Beinn Dorain, Scotland', 'Michal Klajban'),
+  Landscape('02.jpg', 'Mount Shasta from Lake Siskiyou', 'Radomianin'),
   Landscape('06.jpg', 'Flatirons, Colorado', 'Tyler Cipriani'),
 ];
 
