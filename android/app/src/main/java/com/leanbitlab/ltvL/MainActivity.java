@@ -83,6 +83,7 @@ public class MainActivity extends FlutterActivity {
     private final String NOTIFICATIONS_EVENT_CHANNEL = "me.efesser.flauncher/event_notifications";
     private final String WEATHER_EVENT_CHANNEL = "me.efesser.flauncher/event_weather";
     private final String WATCH_NEXT_EVENT_CHANNEL = "me.efesser.flauncher/event_watch_next";
+    private final String NOW_PLAYING_EVENT_CHANNEL = "me.efesser.flauncher/event_now_playing";
     private MethodChannel.Result pendingPermissionResult;
     private static final ExecutorService sIoExecutor = Executors.newFixedThreadPool(4);
 
@@ -220,6 +221,9 @@ public class MainActivity extends FlutterActivity {
 
         new EventChannel(messenger, NETWORK_EVENT_CHANNEL).setStreamHandler(
                 new NetworkEventStreamHandler(this));
+
+        new EventChannel(messenger, NOW_PLAYING_EVENT_CHANNEL).setStreamHandler(
+                new NowPlayingStreamHandler(getApplicationContext()));
 
         new EventChannel(messenger, NOTIFICATIONS_EVENT_CHANNEL).setStreamHandler(
                 new EventChannel.StreamHandler() {

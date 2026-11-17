@@ -17,6 +17,7 @@ import 'package:flauncher/providers/settings_service.dart';
 import 'package:flauncher/widgets/app_card_keys.dart';
 import 'package:flauncher/widgets/focus_keyboard_listener.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
+import 'package:flauncher/widgets/home/home_slot.dart';
 import 'package:flauncher/widgets/home/top_info.dart';
 import 'package:flauncher/widgets/home/video_loops.dart';
 import 'package:flauncher/widgets/settings/settings_panel.dart';
@@ -211,7 +212,14 @@ class _HomeViewState extends State<HomeView> {
                         // Out toward the screen corner, mirroring the settings button on the right.
                         child: Transform.translate(
                           offset: const Offset(-(_sidePadding - 6), 0),
-                          child: const Padding(padding: EdgeInsets.only(top: 18), child: TopInfo()),
+                          child: const Padding(
+                            // The menu button sits out past the content margin, so a little room is enough.
+                            padding: EdgeInsets.only(top: 18, right: 24),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [TopInfo(), SizedBox(width: 44), Flexible(child: HomeSlot())],
+                            ),
+                          ),
                         ),
                       ),
                       Align(

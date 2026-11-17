@@ -34,8 +34,8 @@ class HomeAmbience extends ChangeNotifier {
     final color = _colorCache.containsKey(packageName)
         ? _colorCache[packageName]
         : _colorCache[packageName] = await _signatureColor(artwork);
-    // Focus may have moved on while the colour was being worked out.
-    if (_focusedPackage != packageName || (color == _focusColor && center == _focusCenter)) return;
+    // Focus may have moved on (or the screen gone) while the colour was being worked out.
+    if (_disposed || _focusedPackage != packageName || (color == _focusColor && center == _focusCenter)) return;
     _focusColor = color;
     _focusCenter = center;
     notifyListeners();
@@ -53,6 +53,14 @@ class HomeAmbience extends ChangeNotifier {
     if ((clamped - _allApps).abs() < 0.01) return;
     _allApps = clamped;
     notifyListeners();
+  }
+
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }
 

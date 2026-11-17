@@ -27,6 +27,7 @@ class FLauncherChannel {
   static const _notificationsEventChannel = EventChannel('me.efesser.flauncher/event_notifications');
   static const _weatherEventChannel = EventChannel('me.efesser.flauncher/event_weather');
   static const _watchNextEventChannel = EventChannel('me.efesser.flauncher/event_watch_next');
+  static const _nowPlayingEventChannel = EventChannel('me.efesser.flauncher/event_now_playing');
 
   Future<List<Map<dynamic, dynamic>>> getApplications() async {
     try {
@@ -312,6 +313,9 @@ class FLauncherChannel {
 
   StreamSubscription<dynamic> addWeatherChangedListener(void Function(dynamic) onEvent) =>
       _weatherEventChannel.receiveBroadcastStream().listen(onEvent);
+
+  /// What any app is playing, as maps; an empty map when nothing has a media session.
+  Stream<dynamic> nowPlayingEvents() => _nowPlayingEventChannel.receiveBroadcastStream();
 
   StreamSubscription<dynamic> addWatchNextChangedListener(void Function(dynamic) onEvent) =>
       _watchNextEventChannel.receiveBroadcastStream().listen(onEvent);
