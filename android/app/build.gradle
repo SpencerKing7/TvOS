@@ -80,6 +80,8 @@ android {
         targetSdk 35
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+        // Release keeps plain "TvOS"; the side-by-side builds are labelled so the TV lists them apart.
+        manifestPlaceholders["appLabel"] = "TvOS"
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a'
         }
@@ -100,6 +102,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix '.debug'
+            manifestPlaceholders["appLabel"] = "TvOS Debug"
             signingConfig signingConfigs.debug
             ndk {
                 abiFilters 'armeabi-v7a', 'arm64-v8a'
@@ -109,6 +112,7 @@ android {
         // both the original launcher and the debug build.
         profile {
             applicationIdSuffix '.profile'
+            manifestPlaceholders["appLabel"] = "TvOS Dev"
             signingConfig signingConfigs.debug
         }
         release {

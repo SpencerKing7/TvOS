@@ -63,7 +63,7 @@
         android:allowBackup="false"
         android:banner="@drawable/banner"
         android:icon="@mipmap/ic_launcher"
-        android:label="TvOS">
+        android:label="${appLabel}">
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
@@ -91,7 +91,7 @@
         <service
             android:name=".ClockScreensaverService"
             android:exported="true"
-            android:label="TvOS Clock"
+            android:label="${appLabel} Clock"
             android:permission="android.permission.BIND_DREAM_SERVICE">
             <intent-filter>
                 <action android:name="android.service.dreams.DreamService" />
@@ -104,7 +104,7 @@
 
         <service
             android:name=".LauncherNotificationListenerService"
-            android:label="TvOS Notification Service"
+            android:label="${appLabel} Notification Service"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>
@@ -120,7 +120,7 @@
 
         <service
             android:name=".LauncherAccessibilityService"
-            android:label="TvOS Home Button"
+            android:label="${appLabel} Home Button"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true">
             <intent-filter>
