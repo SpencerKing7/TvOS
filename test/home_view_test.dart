@@ -1,10 +1,13 @@
 import 'package:flauncher/models/app.dart';
+import 'package:flauncher/models/watch_next_program.dart';
 import 'package:flauncher/providers/apps_service.dart';
 import 'package:flauncher/providers/now_playing_service.dart';
 import 'package:flauncher/providers/settings_service.dart';
+import 'package:flauncher/providers/watch_next_service.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
 import 'package:flauncher/widgets/home/home_view.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
@@ -74,9 +77,69 @@ void main() {
       expect(find.text('NOW PLAYING'), shows ? findsOneWidget : findsNothing);
     });
   }
+
+  group('the slot beside the clock', () {
+    final show = WatchNextProgram(
+      id: 7,
+      packageName: 'com.netflix.ninja',
+      title: 'Show',
+      description: 'S1 E2',
+      watchNextType: 0,
+      lastEngagementTime: DateTime(2026, 11, 17).millisecondsSinceEpoch,
+      playbackPosition: 1,
+      duration: 2,
+      intentUri: 'intent://show',
+      posterArtUri: '',
+    );
+
+    String? focused() => FocusManager.instance.primaryFocus?.debugLabel;
+
+    testWidgets('Up from the top row reaches it, and OK continues the show', (tester) async {
+      final (watch, _) = await _pumpHome(tester, pixelRatio: 1.5, watching: [show]);
+      expect(find.text('CONTINUE WATCHING'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      expect(focused(), 'home slot');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      verify(watch.launch(show)).called(1);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(focused(), 'home menu');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(focused(), 'home slot');
+    });
+
+    testWidgets('with nothing in it, Up goes to the menu as before', (tester) async {
+      await _pumpHome(tester, pixelRatio: 1.5);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      expect(focused(), 'home menu');
+    });
+
+    testWidgets('asks for TV listings once, the first time Home opens', (tester) async {
+      final (watch, settings) = await _pumpHome(tester, watchNextAsked: false);
+      verify(settings.setWatchNextAsked()).called(1);
+      verify(watch.requestPermission()).called(1);
+    });
+
+    testWidgets('does not ask again once asked', (tester) async {
+      final (watch, _) = await _pumpHome(tester);
+      verifyNever(watch.requestPermission());
+    });
+  });
 }
 
-Future<void> _pumpHome(WidgetTester tester, {Stream<dynamic> nowPlaying = const Stream.empty(), double pixelRatio = 2.0}) async {
+/// Pumps Home with mocked services, returning the Watch Next and settings mocks to check against.
+Future<(MockWatchNextService, MockSettingsService)> _pumpHome(WidgetTester tester,
+    {Stream<dynamic> nowPlaying = const Stream.empty(),
+    double pixelRatio = 2.0,
+    List<WatchNextProgram> watching = const [],
+    bool watchNextAsked = true}) async {
   tester.view.physicalSize = const Size(1920, 1080);
   tester.view.devicePixelRatio = pixelRatio;
   addTearDown(tester.view.reset);
@@ -91,6 +154,15 @@ Future<void> _pumpHome(WidgetTester tester, {Stream<dynamic> nowPlaying = const 
   final settings = MockSettingsService();
   when(settings.homeFavoritesSeeded).thenReturn(true);
   when(settings.homeBackground).thenReturn('video');
+  when(settings.watchNextAsked).thenReturn(watchNextAsked);
+  when(settings.setWatchNextAsked()).thenAnswer((_) async {});
+  final watch = MockWatchNextService();
+  when(watch.hasPermission).thenReturn(true);
+  when(watch.programs).thenReturn(watching);
+  when(watch.checkPermission()).thenAnswer((_) async => false);
+  when(watch.requestPermission()).thenAnswer((_) async => true);
+  when(watch.launch(any)).thenAnswer((_) async => true);
+  when(watch.loadPoster(any)).thenAnswer((_) async => null);
   SharedPreferences.setMockInitialValues({});
   final channel = MockFLauncherChannel();
   when(channel.nowPlayingEvents()).thenAnswer((_) => nowPlaying);
@@ -102,8 +174,10 @@ Future<void> _pumpHome(WidgetTester tester, {Stream<dynamic> nowPlaying = const 
       ChangeNotifierProvider<SettingsService>.value(value: settings),
       ChangeNotifierProvider(create: (_) => HomeAmbience()),
       ChangeNotifierProvider<NowPlayingService>.value(value: music),
+      ChangeNotifierProvider<WatchNextService>.value(value: watch),
     ],
     child: const MaterialApp(home: Scaffold(body: HomeView())),
   ));
   await tester.pump(const Duration(seconds: 1));
+  return (watch, settings);
 }

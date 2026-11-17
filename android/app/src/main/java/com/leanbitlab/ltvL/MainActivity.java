@@ -192,6 +192,15 @@ public class MainActivity extends FlutterActivity {
                     }
                 }
                 case "getWatchNextPrograms" -> result.success(getWatchNextPrograms());
+                case "loadImageUri" -> {
+                    String uri = call.argument("uri");
+                    Number maxPx = call.argument("maxPx");
+                    // Content providers can be slow; decode off the UI thread.
+                    sIoExecutor.execute(() -> {
+                        byte[] bytes = ArtLoader.encode(ArtLoader.decodeUri(this, uri), maxPx == null ? 640 : maxPx.intValue());
+                        runOnUiThread(() -> result.success(bytes));
+                    });
+                }
                 case "deleteWatchNextProgram" -> {
                     Number id = call.argument("id");
                     if (id != null) {
