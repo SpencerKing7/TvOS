@@ -16,12 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import 'package:flauncher/database.dart';
 import 'package:flauncher/providers/apps_service.dart';
 import 'package:flauncher/models/app.dart';
-import 'package:flauncher/models/category.dart';
 import 'package:flauncher/widgets/add_to_category_dialog.dart';
-import 'package:flauncher/widgets/application_info_panel.dart';
 import 'package:flauncher/widgets/settings/applications_panel_page.dart';
 import 'package:flauncher/widgets/settings/app_details_page.dart';
 import 'package:flutter/material.dart';

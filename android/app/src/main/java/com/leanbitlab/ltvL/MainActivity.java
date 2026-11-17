@@ -133,6 +133,16 @@ public class MainActivity extends FlutterActivity {
                     }
                 }
                 case "checkUsageStatsPermission" -> result.success(checkUsageStatsPermission());
+                case "getAppForegroundTime" -> result.success(getAppForegroundTime());
+                case "setKeepScreenOn" -> {
+                    // Holds the screensaver and sleep off only while this window is showing.
+                    if (Boolean.TRUE.equals(call.arguments())) {
+                        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    } else {
+                        getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    }
+                    result.success(null);
+                }
                 case "requestUsageStatsPermission" -> {
                     requestUsageStatsPermission();
                     result.success(null);
@@ -957,6 +967,26 @@ public class MainActivity extends FlutterActivity {
         }
 
         return totalBytes;
+    }
+
+    /** Package name → milliseconds in the foreground over the last 90 days; empty without usage access. */
+    private Map<String, Long> getAppForegroundTime() {
+        Map<String, Long> totals = new HashMap<>();
+        if (!checkUsageStatsPermission()) {
+            return totals;
+        }
+        android.app.usage.UsageStatsManager usm =
+                (android.app.usage.UsageStatsManager) getSystemService(Context.USAGE_STATS_SERVICE);
+        long end = System.currentTimeMillis();
+        long start = end - 90L * 24 * 60 * 60 * 1000;
+        Map<String, android.app.usage.UsageStats> stats = usm.queryAndAggregateUsageStats(start, end);
+        for (Map.Entry<String, android.app.usage.UsageStats> entry : stats.entrySet()) {
+            long time = entry.getValue().getTotalTimeInForeground();
+            if (time > 0) {
+                totals.put(entry.getKey(), time);
+            }
+        }
+        return totals;
     }
 
     private boolean checkUsageStatsPermission() {

@@ -26,6 +26,10 @@ import 'package:flauncher/widgets/apps_grid.dart';
 import 'package:flauncher/widgets/category_row.dart';
 import 'package:flauncher/widgets/launcher_alternative_view.dart';
 import 'package:flauncher/widgets/focus_aware_app_bar.dart';
+import 'package:flauncher/widgets/home/ambience.dart';
+import 'package:flauncher/widgets/home/ambient_background.dart';
+import 'package:flauncher/widgets/home/home_view.dart';
+import 'package:flauncher/widgets/home/keep_awake.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flauncher/widgets/continue_watching_row.dart';
@@ -42,6 +46,9 @@ class FLauncher extends StatefulWidget {
   State<FLauncher> createState() => _FLauncherState();
 }
 
+// The upstream sectioned layout stays in place behind this switch so it can be compared.
+const bool _useHomeView = true;
+
 class _FLauncherState extends State<FLauncher> {
   final GlobalKey<FocusAwareAppBarState> _appBarKey = GlobalKey();
 
@@ -52,15 +59,20 @@ class _FLauncherState extends State<FLauncher> {
         onInvoke: (_) => _appBarKey.currentState?.focusSettings(),
       ),
     },
-    child: FocusTraversalGroup(
+    child: ChangeNotifierProvider(
+      create: (_) => HomeAmbience(),
+      child: FocusTraversalGroup(
       policy: RowByRowTraversalPolicy(),
       child: Stack(
         children: [
-          RepaintBoundary(
-            child: Consumer<WallpaperService>(
-              builder: (_, wallpaperService, __) => _wallpaper(context, wallpaperService)
+          if (_useHomeView)
+            const Positioned.fill(child: AmbientBackground())
+          else
+            RepaintBoundary(
+              child: Consumer<WallpaperService>(
+                builder: (_, wallpaperService, __) => _wallpaper(context, wallpaperService)
+              ),
             ),
-          ),
           Consumer<LauncherState>(
             builder: (_, state, child) => Visibility(
               child: child!,
@@ -71,11 +83,15 @@ class _FLauncherState extends State<FLauncher> {
             ),
             child: Scaffold(
               backgroundColor: Colors.transparent,
-              appBar: FocusAwareAppBar(key: _appBarKey),
+              // The home view has its own corner menu; the old bar would only steal focus.
+              appBar: _useHomeView ? null : FocusAwareAppBar(key: _appBarKey),
               body: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: Consumer<AppsService>(
                   builder: (context, appsService, _) {
+                    if (appsService.initialized && _useHomeView) {
+                      return const KeepAwake(child: HomeView());
+                    }
                     if (appsService.initialized) {
                       return Selector<WatchNextService, bool>(
                         selector: (_, watchNext) => watchNext.programs.isNotEmpty,
@@ -115,6 +131,7 @@ class _FLauncherState extends State<FLauncher> {
           )
         ]
       )
+    ),
     ),
   );
 

@@ -114,6 +114,11 @@ class FLauncherChannel {
   Future<bool> checkUsageStatsPermission() async =>
       await _methodChannel.invokeMethod("checkUsageStatsPermission");
 
+  Future<Map<String, int>> getAppForegroundTime() async {
+    final result = await _methodChannel.invokeMethod<Map<dynamic, dynamic>>("getAppForegroundTime");
+    return (result ?? {}).map((key, value) => MapEntry(key as String, (value as num).toInt()));
+  }
+
   Future<void> requestUsageStatsPermission() async =>
       await _methodChannel.invokeMethod("requestUsageStatsPermission");
 
