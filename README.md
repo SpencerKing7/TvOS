@@ -39,6 +39,11 @@ TvOS is an ordinary app plus a small accessibility service that sends the remote
 1. Build and sign a release APK (below), then install it over the network with `adb install`.
 2. On the TV, open **Settings → System → Accessibility**, select **TvOS Home Button** under **Services**, turn on **Enable** and choose **Allow**.
 3. Press **Home** from any app. You should land on TvOS.
+4. Optional, for **Now playing** (the song, artist and cover beside the clock while music plays): give TvOS notification access, which is how Android lets an app see other apps' media sessions. Look under **Settings → Apps → Special app access → Notification access** and turn on **TvOS Notification Service**. If the TV doesn't show that page, grant it over adb instead:
+
+   ```bash
+   adb shell cmd notification allow_listener com.spencerking.tvos/com.leanbitlab.ltvL.LauncherNotificationListenerService
+   ```
 
 After the TV restarts it briefly shows Google TV's own home first; the first press of **Home** brings TvOS back.
 

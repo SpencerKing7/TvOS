@@ -1,5 +1,6 @@
 import 'package:flauncher/models/app.dart';
 import 'package:flauncher/providers/apps_service.dart';
+import 'package:flauncher/providers/now_playing_service.dart';
 import 'package:flauncher/providers/settings_service.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
 import 'package:flauncher/widgets/home/home_view.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:transparent_image/transparent_image.dart';
 
 import 'mocks.dart';
@@ -49,33 +51,59 @@ void main() {
   });
 
   testWidgets('shows the ten Home apps and the All Apps hint', (tester) async {
-    tester.view.physicalSize = const Size(1920, 1080);
-    tester.view.devicePixelRatio = 2.0;
-    addTearDown(tester.view.reset);
-
-    final favorites = fakeCategory(name: 'Favorites');
-    favorites.applications.addAll(_apps(_pinned));
-    final appsService = MockAppsService();
-    when(appsService.initialized).thenReturn(true);
-    when(appsService.launcherSections).thenReturn([favorites]);
-    when(appsService.getAppBanner(any)).thenAnswer((_) async => kTransparentImage);
-    when(appsService.getAppIcon(any)).thenAnswer((_) async => kTransparentImage);
-    final settings = MockSettingsService();
-    when(settings.homeFavoritesSeeded).thenReturn(true);
-    when(settings.homeBackground).thenReturn('video');
-
-    await tester.pumpWidget(MultiProvider(
-      providers: [
-        ChangeNotifierProvider<AppsService>.value(value: appsService),
-        ChangeNotifierProvider<SettingsService>.value(value: settings),
-        ChangeNotifierProvider(create: (_) => HomeAmbience()),
-      ],
-      child: const MaterialApp(home: Scaffold(body: HomeView())),
-    ));
-    await tester.pump(const Duration(seconds: 1));
+    await _pumpHome(tester);
 
     // Each app shows twice: once in the Home rows, once in the All Apps grid below.
     expect(find.byType(HomeTile), findsNWidgets(_pinned.length * 2));
     expect(find.text('All Apps'), findsWidgets);
   });
+
+  // The test font is far wider than the TV's, so the clock leaves less room here than on the TV.
+  for (final (ratio, shows) in [(1.5, true), (2.0, false)]) {
+    testWidgets('a long song title never overflows beside the time (pixel ratio $ratio)', (tester) async {
+      await _pumpHome(tester,
+          pixelRatio: ratio,
+          nowPlaying: Stream.value({
+            'packageName': 'com.spotify.tv.android',
+            'title': 'A Very Long Song Title That Goes On And On Past Any Reasonable Width',
+            'artist': 'An Artist With An Equally Long Name, Featuring Several Other Artists',
+            'playing': true,
+          }));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('NOW PLAYING'), shows ? findsOneWidget : findsNothing);
+    });
+  }
+}
+
+Future<void> _pumpHome(WidgetTester tester, {Stream<dynamic> nowPlaying = const Stream.empty(), double pixelRatio = 2.0}) async {
+  tester.view.physicalSize = const Size(1920, 1080);
+  tester.view.devicePixelRatio = pixelRatio;
+  addTearDown(tester.view.reset);
+
+  final favorites = fakeCategory(name: 'Favorites');
+  favorites.applications.addAll(_apps(_pinned));
+  final appsService = MockAppsService();
+  when(appsService.initialized).thenReturn(true);
+  when(appsService.launcherSections).thenReturn([favorites]);
+  when(appsService.getAppBanner(any)).thenAnswer((_) async => kTransparentImage);
+  when(appsService.getAppIcon(any)).thenAnswer((_) async => kTransparentImage);
+  final settings = MockSettingsService();
+  when(settings.homeFavoritesSeeded).thenReturn(true);
+  when(settings.homeBackground).thenReturn('video');
+  SharedPreferences.setMockInitialValues({});
+  final channel = MockFLauncherChannel();
+  when(channel.nowPlayingEvents()).thenAnswer((_) => nowPlaying);
+  final music = NowPlayingService(channel, await SharedPreferences.getInstance());
+
+  await tester.pumpWidget(MultiProvider(
+    providers: [
+      ChangeNotifierProvider<AppsService>.value(value: appsService),
+      ChangeNotifierProvider<SettingsService>.value(value: settings),
+      ChangeNotifierProvider(create: (_) => HomeAmbience()),
+      ChangeNotifierProvider<NowPlayingService>.value(value: music),
+    ],
+    child: const MaterialApp(home: Scaffold(body: HomeView())),
+  ));
+  await tester.pump(const Duration(seconds: 1));
 }
