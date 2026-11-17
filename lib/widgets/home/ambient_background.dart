@@ -14,6 +14,7 @@ import 'dart:ui' as ui;
 import 'package:flauncher/providers/settings_service.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
 import 'package:flauncher/widgets/home/landscapes.dart';
+import 'package:flauncher/widgets/home/video_loops.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -128,10 +129,23 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
   Widget build(BuildContext context) {
     final ambience = context.watch<HomeAmbience>();
     final slides = _slides;
+    final video = _mode == 'video' && videoLoopsAvailable;
     return Stack(
       fit: StackFit.expand,
       children: [
-        _painted(ambience, slides),
+        if (!video)
+          _painted(ambience, slides)
+        else ...[
+          // A still gradient shows until the first clip is ready; once a clip covers the
+          // screen it isn't drawn at all (one less full-screen layer per video frame).
+          ValueListenableBuilder<bool>(
+            valueListenable: videoShowing,
+            builder: (context, showing, _) =>
+                showing ? const SizedBox.shrink() : _painted(ambience, null, layer: _Layer.base, animate: false),
+          ),
+          const VideoLoops(),
+          _painted(ambience, null, layer: _Layer.overlays, animate: false),
+        ],
         if (slides?.photo != null) _caption(landscapes[slides!.index], ambience.allApps),
       ],
     );
@@ -161,7 +175,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
         ),
       );
 
-  Widget _painted(HomeAmbience ambience, _Slides? slides) {
+  Widget _painted(HomeAmbience ambience, _Slides? slides, {_Layer layer = _Layer.all, bool animate = true}) {
     return RepaintBoundary(
       child: TweenAnimationBuilder<Color?>(
         // Glow colour eases from one app to the next instead of snapping...
@@ -176,11 +190,12 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
           curve: Curves.easeOutCubic,
           builder: (context, center, _) => CustomPaint(
             painter: _AmbientPainter(
-              seconds: _seconds,
+              seconds: animate ? _seconds : _still,
               glow: glow ?? Colors.transparent,
               glowCenter: center,
               allApps: ambience.allApps,
               slides: slides,
+              layer: layer,
             ),
             size: Size.infinite,
           ),
@@ -189,6 +204,11 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
     );
   }
 }
+
+/// Never ticks: for layers that don't animate (under and over a playing video).
+final ValueNotifier<double> _still = ValueNotifier(0);
+
+enum _Layer { all, base, overlays }
 
 /// The landscape on screen and the one it is fading in over.
 class _Slides {
@@ -224,6 +244,7 @@ class _AmbientPainter extends CustomPainter {
   final Offset? glowCenter;
   final double allApps;
   final _Slides? slides;
+  final _Layer layer;
 
   _AmbientPainter({
     required this.seconds,
@@ -231,6 +252,7 @@ class _AmbientPainter extends CustomPainter {
     required this.glowCenter,
     required this.allApps,
     required this.slides,
+    required this.layer,
   }) : super(repaint: seconds);
 
   @override
@@ -238,12 +260,15 @@ class _AmbientPainter extends CustomPainter {
     final t = seconds.value;
     final photo = slides?.photo;
 
-    if (photo != null) {
-      _paintLandscapes(canvas, size, t);
-    } else {
-      _paintGradient(canvas, size, t);
+    if (layer != _Layer.overlays) {
+      if (photo != null) {
+        _paintLandscapes(canvas, size, t);
+      } else {
+        _paintGradient(canvas, size, t);
+      }
     }
-    _paintOverlays(canvas, size, darker: photo != null);
+    // Over a video (overlays-only layer) treat it like a photo: heavier wash, no glow.
+    if (layer != _Layer.base) _paintOverlays(canvas, size, darker: photo != null || layer == _Layer.overlays);
   }
 
   /// Photos fill the screen, slowly zooming and drifting (each one a different way),
@@ -332,6 +357,23 @@ class _AmbientPainter extends CustomPainter {
           [0, 0.45, 1],
         ),
     );
+
+    // Photos and video can have bright sky right where the time and weather sit; a soft
+    // dark pool behind that corner keeps them readable without a visible box.
+    if (darker) {
+      final corner = Offset(size.width * 0.18, size.height * 0.16);
+      final radius = size.width * 0.42;
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..shader = ui.Gradient.radial(
+            corner,
+            radius,
+            [Colors.black.withOpacity(0.5), Colors.black.withOpacity(0.25), Colors.black.withOpacity(0)],
+            [0, 0.5, 1],
+          ),
+      );
+    }
 
     // In All Apps the grid fills the screen, so dim the whole thing.
     if (allApps > 0) {

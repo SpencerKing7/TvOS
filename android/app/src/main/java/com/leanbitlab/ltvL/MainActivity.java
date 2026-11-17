@@ -134,6 +134,15 @@ public class MainActivity extends FlutterActivity {
                 }
                 case "checkUsageStatsPermission" -> result.success(checkUsageStatsPermission());
                 case "getAppForegroundTime" -> result.success(getAppForegroundTime());
+                case "setKeepScreenOn" -> {
+                    // Holds the screensaver and sleep off only while this window is showing.
+                    if (Boolean.TRUE.equals(call.arguments())) {
+                        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    } else {
+                        getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    }
+                    result.success(null);
+                }
                 case "requestUsageStatsPermission" -> {
                     requestUsageStatsPermission();
                     result.success(null);

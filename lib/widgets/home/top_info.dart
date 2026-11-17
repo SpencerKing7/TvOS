@@ -97,7 +97,11 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
     }
   }
 
-  static const _shadow = [Shadow(color: Colors.black54, blurRadius: 12)];
+  // Two shadows: a tight one for edge definition, a wide one to lift text off bright sky.
+  static const _shadow = [
+    Shadow(color: Colors.black54, blurRadius: 3, offset: Offset(0, 1)),
+    Shadow(color: Colors.black45, blurRadius: 18),
+  ];
 
   /// Large time | hairline | date over weather, the right side matching the time's height.
   @override
@@ -112,7 +116,7 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
             DateFormat('h:mm').format(_now),
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 92,
+              fontSize: 102,
               height: 1.0,
               fontWeight: FontWeight.w200,
               letterSpacing: -2,
@@ -130,7 +134,7 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
             children: [
               Text(
                 DateFormat('EEE d').format(_now),
-                style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w500, shadows: _shadow),
+                style: const TextStyle(color: Colors.white, fontSize: 31, fontWeight: FontWeight.w500, shadows: _shadow),
               ),
               if (weather != null) _weatherLine(weather),
             ],
@@ -143,11 +147,11 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
   Widget _weatherLine(_Weather weather) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(weather.icon, color: Colors.white70, size: 26, shadows: _shadow),
+          Icon(weather.icon, color: Colors.white, size: 29, shadows: _shadow),
           const SizedBox(width: 8),
           Text(
             '${weather.temperature}°',
-            style: const TextStyle(color: Colors.white70, fontSize: 28, fontWeight: FontWeight.w400, shadows: _shadow),
+            style: const TextStyle(color: Colors.white, fontSize: 31, fontWeight: FontWeight.w400, shadows: _shadow),
           ),
           const SizedBox(width: 12),
           // Today's high over today's low, split by a hairline.
@@ -155,9 +159,9 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('H ${weather.high}°', style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.1)),
+              Text('H ${weather.high}°', style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.1, shadows: _shadow)),
               Container(margin: const EdgeInsets.symmetric(vertical: 2), width: 36, height: 1, color: Colors.white24),
-              Text('L ${weather.low}°', style: const TextStyle(color: Colors.white54, fontSize: 13, height: 1.1)),
+              Text('L ${weather.low}°', style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.1, shadows: _shadow)),
             ],
           ),
         ],

@@ -29,6 +29,7 @@ import 'package:flauncher/widgets/focus_aware_app_bar.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
 import 'package:flauncher/widgets/home/ambient_background.dart';
 import 'package:flauncher/widgets/home/home_view.dart';
+import 'package:flauncher/widgets/home/keep_awake.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flauncher/widgets/continue_watching_row.dart';
@@ -89,7 +90,7 @@ class _FLauncherState extends State<FLauncher> {
                 child: Consumer<AppsService>(
                   builder: (context, appsService, _) {
                     if (appsService.initialized && _useHomeView) {
-                      return const HomeView();
+                      return const KeepAwake(child: HomeView());
                     }
                     if (appsService.initialized) {
                       return Selector<WatchNextService, bool>(

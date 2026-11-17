@@ -18,6 +18,7 @@ import 'package:flauncher/widgets/app_card_keys.dart';
 import 'package:flauncher/widgets/focus_keyboard_listener.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
 import 'package:flauncher/widgets/home/top_info.dart';
+import 'package:flauncher/widgets/home/video_loops.dart';
 import 'package:flauncher/widgets/settings/settings_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -198,14 +199,20 @@ class _HomeViewState extends State<HomeView> {
                   // Time/date/weather sit small in the corner; the rest is free for more content.
                   child: Stack(
                     children: [
-                      const Align(
+                      Align(
                         alignment: Alignment.topLeft,
-                        child: Padding(padding: EdgeInsets.only(left: 8, top: 40), child: TopInfo()),
+                        // Out toward the screen corner, mirroring the settings button on the right.
+                        child: Transform.translate(
+                          offset: const Offset(-(_sidePadding - 6), 0),
+                          child: const Padding(padding: EdgeInsets.only(top: 18), child: TopInfo()),
+                        ),
                       ),
                       Align(
                         alignment: Alignment.topRight,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 44),
+                        // Out past the content margins, into the screen's own corner (about 20
+                        // from the top and right edges); it's a quiet utility, not a destination.
+                        child: Transform.translate(
+                          offset: const Offset(_sidePadding - 4, 4),
                           child: _MenuButton(focusNode: _menuNode, onPressed: _showHomeMenu, onDown: () => _focusHomeSlot(_homeColumns - 1)),
                         ),
                       ),
@@ -402,13 +409,26 @@ class _MenuButtonState extends State<_MenuButton> {
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          width: 52,
-          height: 52,
+          width: 28,
+          height: 28,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: _focused ? Colors.white : Colors.white.withOpacity(0.06),
+            // A faint dark disc and soft shadow keep it visible over bright sky.
+            color: _focused ? Colors.white : Colors.black.withOpacity(0.22),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(_focused ? 0.45 : 0.3),
+                blurRadius: _focused ? 18 : 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-          child: Icon(Icons.tune_rounded, size: 24, color: _focused ? Colors.black : Colors.white38),
+          child: Icon(
+            Icons.tune_rounded,
+            size: 14,
+            color: _focused ? Colors.black : Colors.white60,
+            shadows: _focused ? null : const [Shadow(color: Colors.black54, blurRadius: 4)],
+          ),
         ),
       );
 }
@@ -450,7 +470,7 @@ class _HomeMenu extends StatelessWidget {
     return Align(
       alignment: Alignment.topRight,
       child: Padding(
-        padding: const EdgeInsets.only(top: 110, right: 56),
+        padding: const EdgeInsets.only(top: 64, right: 20),
         child: Material(
           color: const Color(0xF21E1E22),
           borderRadius: BorderRadius.circular(20),
@@ -468,7 +488,8 @@ class _HomeMenu extends StatelessWidget {
                   ),
                   option('gradient', Icons.gradient_rounded, 'Gradient', first: true),
                   option('landscapes', Icons.landscape_rounded, 'Landscapes'),
-                  option('video', Icons.movie_filter_rounded, 'Video loops (soon)', enabled: false),
+                  option('video', Icons.movie_filter_rounded, videoLoopsAvailable ? 'Video loops' : 'Video loops (needs setup)',
+                      enabled: videoLoopsAvailable),
                   const Divider(color: Colors.white12, height: 20),
                   option('settings', Icons.settings_rounded, 'Launcher settings'),
                 ],
