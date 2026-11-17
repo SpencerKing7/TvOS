@@ -158,7 +158,7 @@ class SettingsService extends ChangeNotifier {
   Future<void> setHomeFavoritesSeeded() => _sharedPreferences.setBool(_homeFavoritesSeededKey, true);
 
   /// Home screen background: 'gradient', 'landscapes' or 'video'.
-  String get homeBackground => _sharedPreferences.getString(_homeBackgroundKey) ?? 'gradient';
+  String get homeBackground => _sharedPreferences.getString(_homeBackgroundKey) ?? 'video';
 
   Future<void> setHomeBackground(String value) async {
     await _sharedPreferences.setString(_homeBackgroundKey, value);

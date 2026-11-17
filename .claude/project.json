@@ -1,0 +1,5 @@
+{
+  "name": "TvOS",
+  "defaultBranch": "main",
+  "verify": "scripts/verify.sh"
+}

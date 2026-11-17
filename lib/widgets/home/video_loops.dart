@@ -45,7 +45,6 @@ const videoClips = [
   VideoClip('13180793/13180793-hd_1920_1080_30fps.mp4'), // mountains: dense fog over green mountains
   VideoClip('30131614/12921336_1920_1080_30fps.mp4'), // water: calm ocean at sunset
   VideoClip('30770305/13162097_1920_1080_30fps.mp4'), // forest: misty rainforest from above
-  VideoClip('16905150/16905150-hd_1920_1080_24fps.mp4'), // desert: windblown dunes at sunrise
   VideoClip('12742754/12742754-hd_1920_1080_30fps.mp4'), // light: sun through mountain haze
   VideoClip('6341893/6341893-hd_1920_1080_25fps.mp4'), // mountains: clouds rolling over ridges
   VideoClip('28760774/12470205_1920_1080_30fps.mp4'), // water: river and forest from above

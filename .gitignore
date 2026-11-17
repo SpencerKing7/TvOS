@@ -113,7 +113,7 @@ QWEN.md
 AGENTS.md
 AGENTS.original.md
 .pi/
-.claude/
+.claude/settings.local.json
 CLAUDE.md
 CLAUDE.original.md
 .cursor/

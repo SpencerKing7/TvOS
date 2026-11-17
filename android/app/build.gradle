@@ -56,6 +56,12 @@ secretProperties.setProperty("signing_keystore_password", "${System.getenv('FLAU
 secretProperties.setProperty("signing_key_password", "${System.getenv('FLAUNCHER_SIGNING_KEY_PASSWORD')}")
 secretProperties.setProperty("signing_key_alias", "${System.getenv('FLAUNCHER_SIGNING_KEY_ALIAS')}")
 
+// The release key and its passwords live outside the repo, in ~/.android.
+def signingPropertiesFile = new File(System.getProperty("user.home"), ".android/tvos-signing.properties")
+if (signingPropertiesFile.exists()) {
+    signingPropertiesFile.withReader('UTF-8') { reader -> localProperties.load(reader) }
+}
+
 def keystoreFilePath = System.getenv("KEYSTORE_FILE") ?: localProperties['storeFile']
 def hasKeystore = keystoreFilePath != null && file(keystoreFilePath).exists()
 
@@ -68,7 +74,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.leanbitlab.ltvL"
+        applicationId "com.spencerking.tvos"
         compileSdk 35
         minSdk 21
         targetSdk 35
@@ -140,9 +146,9 @@ android {
             output.versionCodeOverride = variant.versionCode
             def abi = output.getFilter(com.android.build.OutputFile.ABI)
             if (abi != null) {
-                outputFileName = "LTvLauncher-${abi}-${variant.buildType.name}.apk"
+                outputFileName = "TvOS-${abi}-${variant.buildType.name}.apk"
             } else {
-                outputFileName = "LTvLauncher-universal-${variant.buildType.name}.apk"
+                outputFileName = "TvOS-universal-${variant.buildType.name}.apk"
             }
         }
     }

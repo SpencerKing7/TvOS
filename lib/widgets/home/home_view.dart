@@ -36,16 +36,37 @@ const Color _cardColor = Color(0xFF2A2A2E);
 /// First-run contents of the top rows, before the user arranges them.
 const _defaultFavorites = [
   'com.spotify.tv.android',
-  'com.apple.atve.androidtv.appletv',
   'com.netflix.ninja',
   'com.peacocktv.peacockandroid',
+  'com.apple.atve.androidtv.appletv',
   'com.cbs.ott', // Paramount+
+  'com.google.android.youtube.tv',
+  'com.disney.disneyplus',
+  'com.espn.score_center',
+  'com.hulu.livingroomplus',
+  'com.fox.foxone',
 ];
 
 /// Utilities that rank high on screen time but aren't what anyone sits down to open.
 const _neverSeeded = {'com.android.tv.settings'};
 
-bool _isSelf(App app) => app.packageName.startsWith('com.leanbitlab.ltvL');
+bool _isSelf(App app) =>
+    app.packageName.startsWith('com.spencerking.tvos') || app.packageName.startsWith('com.leanbitlab.ltvL');
+
+/// First-run Home rows: the pinned apps in order, then the most-watched of the rest.
+@visibleForTesting
+List<App> pickHomeApps(List<App> all, Map<String, int> usage) {
+  final byName = {for (final app in all) app.packageName: app};
+  final picks = <App>[
+    for (final name in _defaultFavorites)
+      if (byName[name] != null) byName[name]!,
+  ];
+  final byUsage = all
+      .where((a) => (usage[a.packageName] ?? 0) > 0)
+      .where((a) => !_neverSeeded.contains(a.packageName) && !_isSelf(a) && !picks.contains(a))
+      .sorted((a, b) => usage[b.packageName]!.compareTo(usage[a.packageName]!));
+  return [...picks, ...byUsage.take(_homeSlots - picks.length)];
+}
 
 Category? _favorites(AppsService service) =>
     service.launcherSections.whereType<Category>().firstWhereOrNull((c) => c.name == _favoritesName);
@@ -79,7 +100,7 @@ class _HomeViewState extends State<HomeView> {
     });
   }
 
-  /// Fills Favorites on first run: the pinned five, then the most-watched apps.
+  /// Fills Favorites on first run: the pinned ten, then the most-watched apps for any that aren't installed.
   Future<void> _seedFavoritesOnce() async {
     final settings = context.read<SettingsService>();
     final service = context.read<AppsService>();
@@ -88,21 +109,7 @@ class _HomeViewState extends State<HomeView> {
     final favorites = _favorites(service);
     if (favorites == null || favorites.applications.where((a) => !_isSelf(a)).isEmpty) {
       await service.refreshForegroundTime();
-      final usage = service.foregroundTime;
-      final all = _allApps(service);
-      final byName = {for (final app in all) app.packageName: app};
-
-      final picks = <App>[
-        for (final name in _defaultFavorites)
-          if (byName[name] != null) byName[name]!,
-      ];
-      final byUsage = all
-          .where((a) => (usage[a.packageName] ?? 0) > 0)
-          .where((a) => !_neverSeeded.contains(a.packageName) && !picks.contains(a))
-          .sorted((a, b) => usage[b.packageName]!.compareTo(usage[a.packageName]!));
-      picks.addAll(byUsage.take(_homeSlots - picks.length));
-
-      await service.addAllToFavorites(picks);
+      await service.addAllToFavorites(pickHomeApps(_allApps(service), service.foregroundTime));
     }
     await settings.setHomeFavoritesSeeded();
   }
