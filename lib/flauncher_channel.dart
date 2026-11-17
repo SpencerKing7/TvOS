@@ -248,6 +248,15 @@ class FLauncherChannel {
     }
   }
 
+  /// A poster or artwork from a content:// (or other local) URI, as small JPEG bytes; null if it can't be read.
+  Future<Uint8List?> loadImageUri(String uri, {int maxPx = 640}) async {
+    try {
+      return await _methodChannel.invokeMethod<Uint8List>('loadImageUri', {'uri': uri, 'maxPx': maxPx});
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<bool> launchWatchNextProgram(String intentUri) async {
     try {
       final bool success = await _methodChannel.invokeMethod("launchWatchNextProgram", {"intentUri": intentUri});

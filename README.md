@@ -27,6 +27,7 @@ The TV's screensaver stays away while the home screen is showing (for up to two 
 | Reach All Apps | Press **Down** past the second row |
 | Come back from All Apps | **Back**, or **Up** from the top row |
 | Change the background | Select the dot in the top-right corner |
+| Go back to what was playing or watching | Press **Up** from the top row to the card beside the clock, then **OK** |
 
 ### Adding new apps
 
@@ -44,6 +45,7 @@ TvOS is an ordinary app plus a small accessibility service that sends the remote
    ```bash
    adb shell cmd notification allow_listener com.spencerking.tvos/com.leanbitlab.ltvL.LauncherNotificationListenerService
    ```
+5. The first time Home opens it asks to read TV listings: allow it, and the card beside the clock can also show **Continue watching** (the show or film you were last part-way through, in apps that publish it).
 
 After the TV restarts it briefly shows Google TV's own home first; the first press of **Home** brings TvOS back.
 

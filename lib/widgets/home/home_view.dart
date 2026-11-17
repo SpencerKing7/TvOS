@@ -13,7 +13,9 @@ import 'package:collection/collection.dart';
 import 'package:flauncher/models/app.dart';
 import 'package:flauncher/models/category.dart';
 import 'package:flauncher/providers/apps_service.dart';
+import 'package:flauncher/providers/now_playing_service.dart';
 import 'package:flauncher/providers/settings_service.dart';
+import 'package:flauncher/providers/watch_next_service.dart';
 import 'package:flauncher/widgets/app_card_keys.dart';
 import 'package:flauncher/widgets/focus_keyboard_listener.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
@@ -27,6 +29,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 const int _homeColumns = 5;
+// The Home column under the slot, where Down from it lands.
+const int _slotColumn = 2;
 const int _homeSlots = 10;
 const int _allAppsColumns = 7;
 // With the 16px body padding this keeps the outer cards inside the TV-safe edge.
@@ -94,6 +98,7 @@ class _HomeViewState extends State<HomeView> {
   void initState() {
     super.initState();
     _seedFavoritesOnce();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _askForWatchNextOnce());
     // Tell the background how far into All Apps we are, so it can dim behind the grid.
     _scroll.addListener(() {
       final height = MediaQuery.sizeOf(context).height;
@@ -118,6 +123,29 @@ class _HomeViewState extends State<HomeView> {
   final ScrollController _scroll = ScrollController();
   final GlobalKey _allAppsHeader = GlobalKey();
   final FocusNode _menuNode = FocusNode(debugLabel: 'home menu');
+  final FocusNode _slotNode = FocusNode(debugLabel: 'home slot');
+
+  /// Continue watching needs the TV-listings permission; ask for it once, the first time Home opens.
+  Future<void> _askForWatchNextOnce() async {
+    if (!mounted) return;
+    final settings = context.read<SettingsService>();
+    final watch = context.read<WatchNextService>();
+    if (settings.watchNextAsked) return;
+    await settings.setWatchNextAsked();
+    if (!await watch.checkPermission()) await watch.requestPermission();
+  }
+
+  /// OK on the slot: back into the song's app, or straight to where the show was left.
+  void _openSlot(SlotEntry entry) {
+    switch (entry) {
+      case SlotTrack(:final track):
+        final apps = context.read<AppsService>();
+        final app = apps.applications.firstWhereOrNull((a) => a.packageName == track.packageName);
+        if (app != null) apps.launchApp(app);
+      case SlotWatch(:final program):
+        context.read<WatchNextService>().launch(program);
+    }
+  }
 
   Future<void> _showHomeMenu() async {
     final settings = context.read<SettingsService>();
@@ -147,6 +175,7 @@ class _HomeViewState extends State<HomeView> {
   void dispose() {
     _scroll.dispose();
     _menuNode.dispose();
+    _slotNode.dispose();
     for (final node in _homeNodes.values) {
       node.dispose();
     }
@@ -186,6 +215,9 @@ class _HomeViewState extends State<HomeView> {
     final home = _home(service);
     final everything = _allApps(service);
     final screenHeight = MediaQuery.sizeOf(context).height;
+    final slot = currentSlot(context.watch<NowPlayingService>(), context.watch<WatchNextService>());
+    // The slot emptied under focus (nothing left to show): drop back to the apps below it.
+    if (slot == null && _slotNode.hasFocus) _focusHomeSlot(_slotColumn);
 
     return SingleChildScrollView(
       controller: _scroll,
@@ -212,12 +244,24 @@ class _HomeViewState extends State<HomeView> {
                         // Out toward the screen corner, mirroring the settings button on the right.
                         child: Transform.translate(
                           offset: const Offset(-(_sidePadding - 6), 0),
-                          child: const Padding(
+                          child: Padding(
                             // The menu button sits out past the content margin, so a little room is enough.
-                            padding: EdgeInsets.only(top: 18, right: 24),
+                            padding: const EdgeInsets.only(top: 18, right: 24),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
-                              children: [TopInfo(), SizedBox(width: 44), Flexible(child: HomeSlot())],
+                              children: [
+                                const TopInfo(),
+                                const SizedBox(width: 44),
+                                Flexible(
+                                  child: HomeSlot(
+                                    entry: slot,
+                                    focusNode: _slotNode,
+                                    onSelect: slot == null ? null : () => _openSlot(slot),
+                                    onDown: () => _focusHomeSlot(_slotColumn),
+                                    onRight: _menuNode.requestFocus,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -228,7 +272,12 @@ class _HomeViewState extends State<HomeView> {
                         // from the top and right edges); it's a quiet utility, not a destination.
                         child: Transform.translate(
                           offset: const Offset(_sidePadding - 4, 4),
-                          child: _MenuButton(focusNode: _menuNode, onPressed: _showHomeMenu, onDown: () => _focusHomeSlot(_homeColumns - 1)),
+                          child: _MenuButton(
+                            focusNode: _menuNode,
+                            onPressed: _showHomeMenu,
+                            onDown: () => _focusHomeSlot(_homeColumns - 1),
+                            onLeft: slot == null ? null : _slotNode.requestFocus,
+                          ),
                         ),
                       ),
                     ],
@@ -243,7 +292,10 @@ class _HomeViewState extends State<HomeView> {
                         app: home[i],
                         focusNode: _nodeFor(home[i].packageName),
                         autofocus: i == 0,
-                        onUp: i < _homeColumns ? _menuNode.requestFocus : null,
+                        // Up reaches the slot from under it and to its left, the menu from the last column.
+                        onUp: i < _homeColumns
+                            ? (slot != null && i < _homeColumns - 1 ? _slotNode.requestFocus : _menuNode.requestFocus)
+                            : null,
                         onFocus: () => _scrollTo(0),
                         onHold: () => setState(() => _moving = home[i].packageName),
                         moving: _moving == home[i].packageName,
@@ -396,8 +448,9 @@ class _MenuButton extends StatefulWidget {
   final FocusNode focusNode;
   final VoidCallback onPressed;
   final VoidCallback onDown;
+  final VoidCallback? onLeft;
 
-  const _MenuButton({required this.focusNode, required this.onPressed, required this.onDown});
+  const _MenuButton({required this.focusNode, required this.onPressed, required this.onDown, this.onLeft});
 
   @override
   State<_MenuButton> createState() => _MenuButtonState();
@@ -418,6 +471,10 @@ class _MenuButtonState extends State<_MenuButton> {
           }
           if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
             widget.onDown();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowLeft && widget.onLeft != null) {
+            widget.onLeft!();
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;

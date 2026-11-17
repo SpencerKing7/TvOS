@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer';
 import 'dart:io' show Platform;
+import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 import 'package:flauncher/flauncher_channel.dart';
 import '../models/watch_next_program.dart';
@@ -133,6 +134,9 @@ class WatchNextService extends ChangeNotifier with WidgetsBindingObserver {
     }
     return granted;
   }
+
+  /// A poster an app keeps in its own content provider, as small JPEG bytes.
+  Future<Uint8List?> loadPoster(String uri) => _channel.loadImageUri(uri);
 
   Future<bool> launch(WatchNextProgram program) async {
     bool launched = false;

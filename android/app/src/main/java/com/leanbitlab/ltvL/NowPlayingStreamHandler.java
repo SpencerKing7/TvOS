@@ -12,18 +12,14 @@ package com.leanbitlab.ltvL;
 import android.content.ComponentName;
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.media.MediaMetadata;
 import android.media.session.MediaController;
 import android.media.session.MediaSessionManager;
 import android.media.session.PlaybackState;
-import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -216,7 +212,7 @@ class NowPlayingStreamHandler implements EventChannel.StreamHandler {
         final Bitmap bitmap = artBitmap(metadata);
         final String artUri = bitmap == null ? artUri(metadata) : null;
         artExecutor.execute(() -> {
-            byte[] art = encode(bitmap != null ? bitmap : load(artUri));
+            byte[] art = ArtLoader.encode(bitmap != null ? bitmap : ArtLoader.decodeUri(context, artUri), ART_MAX_PX);
             main.post(() -> {
                 if (mine != generation) return;
                 lastTrackKey = trackKey;
@@ -256,40 +252,5 @@ class NowPlayingStreamHandler implements EventChannel.StreamHandler {
             if (uri != null && !uri.isEmpty()) return uri;
         }
         return null;
-    }
-
-    /** Art an app only gives as a URI; content:// usually works, anything else is skipped. */
-    private Bitmap load(String uri) {
-        if (uri == null) return null;
-        try {
-            Uri parsed = Uri.parse(uri);
-            String scheme = parsed.getScheme();
-            if (!"content".equals(scheme) && !"android.resource".equals(scheme) && !"file".equals(scheme)) return null;
-            try (InputStream in = context.getContentResolver().openInputStream(parsed)) {
-                return in == null ? null : BitmapFactory.decodeStream(in);
-            }
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static byte[] encode(Bitmap bitmap) {
-        if (bitmap == null || bitmap.getWidth() <= 0 || bitmap.getHeight() <= 0) return null;
-        try {
-            Bitmap scaled = bitmap;
-            int largest = Math.max(bitmap.getWidth(), bitmap.getHeight());
-            if (largest > ART_MAX_PX) {
-                float scale = (float) ART_MAX_PX / largest;
-                scaled = Bitmap.createScaledBitmap(bitmap,
-                        Math.max(1, Math.round(bitmap.getWidth() * scale)),
-                        Math.max(1, Math.round(bitmap.getHeight() * scale)), true);
-            }
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            // JPEG: album art is opaque, and it comes out a fraction of the size of a PNG.
-            scaled.compress(Bitmap.CompressFormat.JPEG, 90, out);
-            return out.toByteArray();
-        } catch (Exception e) {
-            return null;
-        }
     }
 }
