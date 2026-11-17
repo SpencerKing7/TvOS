@@ -43,22 +43,18 @@ const _timelapse = 0.35;
 const videoClips = [
   VideoClip('28042235/12290181_1920_1080_30fps.mp4'), // clouds: over the clouds
   VideoClip('13180793/13180793-hd_1920_1080_30fps.mp4'), // mountains: dense fog over green mountains
-  VideoClip('30131614/12921336_1920_1080_30fps.mp4'), // water: calm ocean at sunset
   VideoClip('30770305/13162097_1920_1080_30fps.mp4'), // forest: misty rainforest from above
   VideoClip('12742754/12742754-hd_1920_1080_30fps.mp4'), // light: sun through mountain haze
   VideoClip('6341893/6341893-hd_1920_1080_25fps.mp4'), // mountains: clouds rolling over ridges
-  VideoClip('28760774/12470205_1920_1080_30fps.mp4'), // water: river and forest from above
   VideoClip('10550175/10550175-hd_1920_1080_30fps.mp4'), // forest: fog over a forest
   VideoClip('39847965/16998539_1920_1080_30fps.mp4', _timelapse), // desert: sunset timelapse
   VideoClip('35763506/15162498_1920_1080_30fps.mp4'), // mountains: snowy peaks
   VideoClip('34470558/14606043_1920_1080_30fps.mp4'), // clouds: sunrise over a sea of clouds
   VideoClip('12228649/12228649-hd_1920_1080_30fps.mp4'), // forest: clouds over a forest
-  VideoClip('3586676/3586676-hd_1920_1080_24fps.mp4'), // water: waves at dusk
   VideoClip('31579321/13458108_1920_1080_30fps.mp4'), // mountains: fog over Yangmingshan
   VideoClip('17207185/17207185-hd_1920_1080_24fps.mp4'), // desert: badlands
   VideoClip('33354461/14202812_1920_1080_30fps.mp4'), // light: mountain sunrise
   VideoClip('28042090/12290191_1920_1080_30fps.mp4'), // clouds: above a cloud-covered mountain
-  VideoClip('11514992/11514992-hd_1920_1080_30fps.mp4'), // forest: forest on a misty mountain
   VideoClip('12858363/12858363-hd_1920_1080_30fps.mp4'), // mountains: fog and white clouds over peaks
   VideoClip('1722697/1722697-hd_1920_1080_25fps.mp4'), // light: mountain silhouettes
   VideoClip('6965877/6965877-hd_1920_1080_30fps.mp4'), // mountains: mist on a mountainside
