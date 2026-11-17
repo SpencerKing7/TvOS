@@ -27,6 +27,7 @@ const _appHighlightAnimationEnabledKey = "app_highlight_animation_enabled";
 const _appKeyClickEnabledKey = "app_key_click_enabled";
 const _autoHideAppBarKey = "auto_hide_app_bar";
 const _homeFavoritesSeededKey = "home_favorites_seeded";
+const _homeBackgroundKey = "home_background";
 const _gradientUuidKey = "gradient_uuid";
 const _backButtonActionKey = "back_button_action";
 const _dateFormatKey = "date_format";
@@ -155,6 +156,14 @@ class SettingsService extends ChangeNotifier {
   bool get homeFavoritesSeeded => _sharedPreferences.getBool(_homeFavoritesSeededKey) ?? false;
 
   Future<void> setHomeFavoritesSeeded() => _sharedPreferences.setBool(_homeFavoritesSeededKey, true);
+
+  /// Home screen background: 'gradient', 'landscapes' or 'video'.
+  String get homeBackground => _sharedPreferences.getString(_homeBackgroundKey) ?? 'gradient';
+
+  Future<void> setHomeBackground(String value) async {
+    await _sharedPreferences.setString(_homeBackgroundKey, value);
+    notifyListeners();
+  }
 
   bool get showCategoryTitles => _showCategoryTitles;
 

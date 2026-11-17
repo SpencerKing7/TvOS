@@ -82,7 +82,8 @@ class _FLauncherState extends State<FLauncher> {
             ),
             child: Scaffold(
               backgroundColor: Colors.transparent,
-              appBar: FocusAwareAppBar(key: _appBarKey),
+              // The home view has its own corner menu; the old bar would only steal focus.
+              appBar: _useHomeView ? null : FocusAwareAppBar(key: _appBarKey),
               body: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: Consumer<AppsService>(

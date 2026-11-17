@@ -11,7 +11,9 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:flauncher/providers/settings_service.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
+import 'package:flauncher/widgets/home/landscapes.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -28,9 +30,18 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
   // ~15 fps is plenty for motion this slow, and keeps the TV's GPU mostly idle.
   static const _frame = Duration(milliseconds: 66);
 
+  // How long each landscape stays before crossfading to the next.
+  static const _photoDuration = Duration(minutes: 3);
+
   final ValueNotifier<double> _seconds = ValueNotifier(0);
   final Stopwatch _clock = Stopwatch()..start();
   Timer? _timer;
+
+  String _mode = 'gradient';
+  _Slides? _slides;
+  Timer? _rotateTimer;
+
+  double get _now => _clock.elapsedMilliseconds / 1000;
 
   @override
   void initState() {
@@ -41,7 +52,57 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
 
   void _start() {
     _timer?.cancel();
-    _timer = Timer.periodic(_frame, (_) => _seconds.value = _clock.elapsedMilliseconds / 1000);
+    _timer = Timer.periodic(_frame, (_) => _seconds.value = _now);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final mode = context.watch<SettingsService>().homeBackground;
+    if (mode == _mode) return;
+    _mode = mode;
+    if (mode == 'landscapes') {
+      _startSlideshow();
+    } else {
+      _stopSlideshow();
+    }
+  }
+
+  Future<void> _startSlideshow() async {
+    _stopSlideshow();
+    final slides = _Slides(index: Random().nextInt(landscapes.length));
+    _slides = slides;
+    final image = await loadLandscape(landscapes[slides.index]);
+    if (!mounted || _slides != slides) return image?.dispose();
+    if (image == null) {
+      // Offline or turned away: show the gradient meanwhile and try again shortly.
+      _rotateTimer = Timer(const Duration(seconds: 20), _startSlideshow);
+      return;
+    }
+    setState(() => slides.show(image, _now));
+    _rotateTimer = Timer.periodic(_photoDuration, (_) => _nextPhoto(slides));
+  }
+
+  /// Loads the next photo in the background, then crossfades to it. Photos that fail
+  /// to download are skipped; the current one stays up meanwhile.
+  Future<void> _nextPhoto(_Slides slides) async {
+    for (var attempt = 0; attempt < landscapes.length; attempt++) {
+      final index = (slides.index + 1 + attempt) % landscapes.length;
+      final image = await loadLandscape(landscapes[index]);
+      if (!mounted || _slides != slides) return image?.dispose();
+      if (image == null) continue;
+      setState(() {
+        slides.index = index;
+        slides.show(image, _now);
+      });
+      return;
+    }
+  }
+
+  void _stopSlideshow() {
+    _rotateTimer?.cancel();
+    _slides?.dispose();
+    _slides = null;
   }
 
   @override
@@ -58,6 +119,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
+    _stopSlideshow();
     _seconds.dispose();
     super.dispose();
   }
@@ -65,6 +127,41 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
   @override
   Widget build(BuildContext context) {
     final ambience = context.watch<HomeAmbience>();
+    final slides = _slides;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _painted(ambience, slides),
+        if (slides?.photo != null) _caption(landscapes[slides!.index], ambience.allApps),
+      ],
+    );
+  }
+
+  /// Where the photo was taken and who took it (the licences require the photographer's
+  /// name; the full licence for each is in assets/landscapes/CREDITS.md). Sized and placed
+  /// to sit on the same line as the "All Apps" hint.
+  Widget _caption(Landscape landscape, double allApps) => Positioned(
+        right: 56,
+        bottom: 25,
+        child: AnimatedOpacity(
+          opacity: allApps > 0.2 ? 0 : 1,
+          duration: const Duration(milliseconds: 300),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 800),
+            // The background sits outside the Scaffold, so it has no text theme of its own.
+            child: Material(
+              key: ValueKey(landscape.file),
+              type: MaterialType.transparency,
+              child: Text(
+                '${landscape.place}  ·  ${landscape.author}',
+                style: const TextStyle(color: Colors.white38, fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.4),
+              ),
+            ),
+          ),
+        ),
+      );
+
+  Widget _painted(HomeAmbience ambience, _Slides? slides) {
     return RepaintBoundary(
       child: TweenAnimationBuilder<Color?>(
         // Glow colour eases from one app to the next instead of snapping...
@@ -73,7 +170,8 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
         curve: Curves.easeOut,
         builder: (context, glow, _) => TweenAnimationBuilder<Offset?>(
           // ...and slides along with focus.
-          tween: Tween<Offset?>(end: ambience.focusCenter),
+          // (Before anything is focused there is no glow, so the centre doesn't matter.)
+          tween: Tween<Offset?>(end: ambience.focusCenter ?? Offset.zero),
           duration: const Duration(milliseconds: 420),
           curve: Curves.easeOutCubic,
           builder: (context, center, _) => CustomPaint(
@@ -82,6 +180,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
               glow: glow ?? Colors.transparent,
               glowCenter: center,
               allApps: ambience.allApps,
+              slides: slides,
             ),
             size: Size.infinite,
           ),
@@ -91,18 +190,100 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
   }
 }
 
+/// The landscape on screen and the one it is fading in over.
+class _Slides {
+  int index;
+  ui.Image? photo;
+  double shownAt = 0;
+  ui.Image? previous;
+  double previousShownAt = 0;
+
+  _Slides({required this.index});
+
+  void show(ui.Image? image, double now) {
+    if (image == null) return;
+    previous?.dispose();
+    previous = photo;
+    previousShownAt = shownAt;
+    photo = image;
+    shownAt = now;
+  }
+
+  void dispose() {
+    photo?.dispose();
+    previous?.dispose();
+  }
+}
+
 class _AmbientPainter extends CustomPainter {
+  static const _fadeSeconds = 2.5;
+  static const _photoSeconds = 180.0;
+
   final ValueNotifier<double> seconds;
   final Color glow;
   final Offset? glowCenter;
   final double allApps;
+  final _Slides? slides;
 
-  _AmbientPainter({required this.seconds, required this.glow, required this.glowCenter, required this.allApps})
-      : super(repaint: seconds);
+  _AmbientPainter({
+    required this.seconds,
+    required this.glow,
+    required this.glowCenter,
+    required this.allApps,
+    required this.slides,
+  }) : super(repaint: seconds);
 
   @override
   void paint(Canvas canvas, Size size) {
     final t = seconds.value;
+    final photo = slides?.photo;
+
+    if (photo != null) {
+      _paintLandscapes(canvas, size, t);
+    } else {
+      _paintGradient(canvas, size, t);
+    }
+    _paintOverlays(canvas, size, darker: photo != null);
+  }
+
+  /// Photos fill the screen, slowly zooming and drifting (each one a different way),
+  /// and crossfade into the next. Dimmed a little overall so they stay in the background.
+  void _paintLandscapes(Canvas canvas, Size size, double t) {
+    final s = slides!;
+    final fade = ((t - s.shownAt) / _fadeSeconds).clamp(0.0, 1.0);
+    if (s.previous != null && fade < 1) {
+      _paintPhoto(canvas, size, s.previous!, t - s.previousShownAt, s.index - 1, 1);
+    }
+    _paintPhoto(canvas, size, s.photo!, t - s.shownAt, s.index, s.previous == null ? 1 : fade);
+    canvas.drawRect(Offset.zero & size, Paint()..color = Colors.black.withOpacity(0.18));
+  }
+
+  void _paintPhoto(Canvas canvas, Size size, ui.Image image, double age, int seed, double opacity) {
+    final progress = (age / (_photoSeconds + _fadeSeconds)).clamp(0.0, 1.0);
+    final zoom = 1.04 + 0.06 * progress;
+    final direction = seed.isEven ? 1 : -1;
+
+    // Crop the image to the screen's shape ("cover"), then narrow it for the zoom and pan.
+    final imageSize = Size(image.width.toDouble(), image.height.toDouble());
+    final cover = applyBoxFit(BoxFit.cover, imageSize, size).source;
+    final crop = Size(cover.width / zoom, cover.height / zoom);
+    final pan = direction * (progress - 0.5) * (cover.width - crop.width);
+    final source = Rect.fromCenter(
+      center: Offset(imageSize.width / 2 + pan, imageSize.height / 2),
+      width: crop.width,
+      height: crop.height,
+    );
+    canvas.drawImageRect(
+      image,
+      source,
+      Offset.zero & size,
+      Paint()
+        ..filterQuality = FilterQuality.medium
+        ..color = Colors.white.withOpacity(opacity),
+    );
+  }
+
+  void _paintGradient(Canvas canvas, Size size, double t) {
     final palette = _Palette.at(DateTime.now());
     final rect = Offset.zero & size;
 
@@ -128,28 +309,40 @@ class _AmbientPainter extends CustomPainter {
         Paint()..shader = ui.Gradient.radial(center, radius, [color.withOpacity(0.55), color.withOpacity(0)]),
       );
     }
+  }
+
+  /// Shared by every background: the quiet zone behind the apps, the All Apps dim,
+  /// and the focused app's glow on top.
+  void _paintOverlays(Canvas canvas, Size size, {required bool darker}) {
+    final rect = Offset.zero & size;
 
     // Keep everything behind the app rows quiet: fade to dark from just above them.
+    // Photos have more detail than the gradient, so they get a heavier wash.
     canvas.drawRect(
       rect,
       Paint()
         ..shader = ui.Gradient.linear(
           Offset(0, size.height * 0.30),
           Offset(0, size.height),
-          [Colors.black.withOpacity(0), Colors.black.withOpacity(0.45), Colors.black.withOpacity(0.62)],
+          [
+            Colors.black.withOpacity(0),
+            Colors.black.withOpacity(darker ? 0.6 : 0.45),
+            Colors.black.withOpacity(darker ? 0.75 : 0.62),
+          ],
           [0, 0.45, 1],
         ),
     );
 
     // In All Apps the grid fills the screen, so dim the whole thing.
     if (allApps > 0) {
-      canvas.drawRect(rect, Paint()..color = Colors.black.withOpacity(0.5 * allApps));
+      canvas.drawRect(rect, Paint()..color = Colors.black.withOpacity((darker ? 0.6 : 0.5) * allApps));
     }
 
     // The focused app's colour, radiating from behind it. Drawn over the dark wash so it
     // reads around the card; soft and wide so it frames the app rather than competing.
+    // Not over photos: tinting a landscape muddies it.
     final center = glowCenter;
-    if (glow.alpha > 0 && center != null) {
+    if (!darker && glow.alpha > 0 && center != null) {
       final radius = size.width * 0.38;
       canvas.drawCircle(
         center,
@@ -165,9 +358,10 @@ class _AmbientPainter extends CustomPainter {
     }
   }
 
+  // Slides change in place (same object, new photo), so a new painter always repaints;
+  // the ticking clock repaints between those.
   @override
-  bool shouldRepaint(_AmbientPainter old) =>
-      old.glow != glow || old.glowCenter != glowCenter || old.allApps != allApps;
+  bool shouldRepaint(_AmbientPainter old) => true;
 }
 
 /// Colours for the time of day, blended smoothly between the keyframes below.

@@ -10,7 +10,6 @@
 import 'dart:async';
 
 import 'package:collection/collection.dart';
-import 'package:flauncher/actions.dart';
 import 'package:flauncher/models/app.dart';
 import 'package:flauncher/models/category.dart';
 import 'package:flauncher/providers/apps_service.dart';
@@ -19,6 +18,7 @@ import 'package:flauncher/widgets/app_card_keys.dart';
 import 'package:flauncher/widgets/focus_keyboard_listener.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
 import 'package:flauncher/widgets/home/top_info.dart';
+import 'package:flauncher/widgets/settings/settings_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -108,6 +108,23 @@ class _HomeViewState extends State<HomeView> {
 
   final ScrollController _scroll = ScrollController();
   final GlobalKey _allAppsHeader = GlobalKey();
+  final FocusNode _menuNode = FocusNode(debugLabel: 'home menu');
+
+  Future<void> _showHomeMenu() async {
+    final settings = context.read<SettingsService>();
+    final choice = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (_) => _HomeMenu(background: settings.homeBackground),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'settings') {
+      await showDialog(context: context, builder: (_) => const SettingsPanel());
+    } else {
+      await settings.setHomeBackground(choice);
+    }
+    _menuNode.requestFocus();
+  }
 
   /// One focus node per home app, so focus can be put back on a specific slot.
   final Map<String, FocusNode> _homeNodes = {};
@@ -120,6 +137,7 @@ class _HomeViewState extends State<HomeView> {
   @override
   void dispose() {
     _scroll.dispose();
+    _menuNode.dispose();
     for (final node in _homeNodes.values) {
       node.dispose();
     }
@@ -133,7 +151,8 @@ class _HomeViewState extends State<HomeView> {
     final header = _allAppsHeader.currentContext;
     if (header != null) {
       Scrollable.ensureVisible(header,
-          alignment: 0.06, duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
+          // Leaves the "⌃ Home" hint near the top with clear space above the heading.
+          alignment: 0.15, duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
     }
   }
 
@@ -177,9 +196,20 @@ class _HomeViewState extends State<HomeView> {
                 SizedBox(
                   height: screenHeight * 0.44,
                   // Time/date/weather sit small in the corner; the rest is free for more content.
-                  child: const Align(
-                    alignment: Alignment.topLeft,
-                    child: Padding(padding: EdgeInsets.only(left: 8, top: 40), child: TopInfo()),
+                  child: Stack(
+                    children: [
+                      const Align(
+                        alignment: Alignment.topLeft,
+                        child: Padding(padding: EdgeInsets.only(left: 8, top: 40), child: TopInfo()),
+                      ),
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 44),
+                          child: _MenuButton(focusNode: _menuNode, onPressed: _showHomeMenu, onDown: () => _focusHomeSlot(_homeColumns - 1)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 _TileGrid(
@@ -191,7 +221,7 @@ class _HomeViewState extends State<HomeView> {
                         app: home[i],
                         focusNode: _nodeFor(home[i].packageName),
                         autofocus: i == 0,
-                        upGoesToSettings: i < _homeColumns,
+                        onUp: i < _homeColumns ? _menuNode.requestFocus : null,
                         onFocus: () => _scrollTo(0),
                         onHold: () => setState(() => _moving = home[i].packageName),
                         moving: _moving == home[i].packageName,
@@ -211,7 +241,7 @@ class _HomeViewState extends State<HomeView> {
           // Everything else, reached by pressing down past your apps.
           Padding(
             key: _allAppsHeader,
-            padding: const EdgeInsets.only(top: 24, bottom: 36),
+            padding: const EdgeInsets.only(top: 40, bottom: 36),
             child: const Text(
               'All Apps',
               style: TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w600),
@@ -227,6 +257,7 @@ class _HomeViewState extends State<HomeView> {
                   app: everything[i],
                   autofocus: home.isEmpty && i == 0,
                   onFocus: i < _allAppsColumns ? _revealAllAppsHeader : null,
+                  onUp: i < _allAppsColumns ? () => _focusHomeSlot(_homeColumns + (i * (_homeColumns - 1) / (_allAppsColumns - 1)).round()) : null,
                   onBack: () => _focusHomeSlot(0),
                   onHold: () => _addToHome(service, home, everything[i]),
                 ),
@@ -338,6 +369,118 @@ class _Toast extends StatelessWidget {
       );
 }
 
+/// A faint control in the top-right corner, reached by pressing Up from the top row.
+class _MenuButton extends StatefulWidget {
+  final FocusNode focusNode;
+  final VoidCallback onPressed;
+  final VoidCallback onDown;
+
+  const _MenuButton({required this.focusNode, required this.onPressed, required this.onDown});
+
+  @override
+  State<_MenuButton> createState() => _MenuButtonState();
+}
+
+class _MenuButtonState extends State<_MenuButton> {
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) => Focus(
+        focusNode: widget.focusNode,
+        onFocusChange: (focused) => setState(() => _focused = focused),
+        onKeyEvent: (_, event) {
+          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+          if (AppCardKeys.validationKeys.contains(event.logicalKey)) {
+            widget.onPressed();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            widget.onDown();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _focused ? Colors.white : Colors.white.withOpacity(0.06),
+          ),
+          child: Icon(Icons.tune_rounded, size: 24, color: _focused ? Colors.black : Colors.white38),
+        ),
+      );
+}
+
+/// Background choice plus a way into the full launcher settings.
+class _HomeMenu extends StatelessWidget {
+  final String background;
+
+  const _HomeMenu({required this.background});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget option(String value, IconData icon, String label, {bool enabled = true, bool first = false}) {
+      final selected = background == value;
+      return TextButton(
+        autofocus: first,
+        onPressed: enabled ? () => Navigator.of(context).pop(value) : null,
+        style: ButtonStyle(
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 18, vertical: 14)),
+          alignment: Alignment.centerLeft,
+          shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          foregroundColor: WidgetStateProperty.resolveWith((states) =>
+              states.contains(WidgetState.focused) ? Colors.black : (enabled ? Colors.white : Colors.white38)),
+          backgroundColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.focused) ? Colors.white : Colors.transparent),
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 22),
+            const SizedBox(width: 14),
+            Expanded(child: Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500))),
+            if (selected) const Icon(Icons.check_rounded, size: 22),
+          ],
+        ),
+      );
+    }
+
+    return Align(
+      alignment: Alignment.topRight,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 110, right: 56),
+        child: Material(
+          color: const Color(0xF21E1E22),
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            width: 340,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(18, 8, 18, 8),
+                    child: Text('Background', style: TextStyle(color: Colors.white54, fontSize: 15)),
+                  ),
+                  option('gradient', Icons.gradient_rounded, 'Gradient', first: true),
+                  option('landscapes', Icons.landscape_rounded, 'Landscapes'),
+                  option('video', Icons.movie_filter_rounded, 'Video loops (soon)', enabled: false),
+                  const Divider(color: Colors.white12, height: 20),
+                  option('settings', Icons.settings_rounded, 'Launcher settings'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 bool _okHeld() => HardwareKeyboard.instance.logicalKeysPressed.any(AppCardKeys.validationKeys.contains);
 
 class _TileGrid extends StatelessWidget {
@@ -362,7 +505,8 @@ class _TileGrid extends StatelessWidget {
       });
 }
 
-/// A quiet cue at the bottom of the first screen: what's below, or how to finish a move.
+/// A quiet cue between Home and All Apps: "All Apps ⌄" below your rows, "⌃ Home" once
+/// you've scrolled down (it then sits at the top of the screen), or how to finish a move.
 class _BottomHint extends StatelessWidget {
   final bool moving;
 
@@ -371,25 +515,37 @@ class _BottomHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const style = TextStyle(color: Colors.white38, fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.4);
+    final inAllApps = context.select<HomeAmbience, bool>((ambience) => ambience.allApps > 0.5);
+    final Widget hint;
+    if (moving) {
+      hint = const Center(
+        key: ValueKey('moving'),
+        child: Text('OK to place   ·   Back to cancel   ·   Hold OK to remove from Home', style: style),
+      );
+    } else if (inAllApps) {
+      hint = const Row(
+        key: ValueKey('home'),
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.keyboard_arrow_up_rounded, color: Colors.white38, size: 20),
+          SizedBox(width: 4),
+          Text('Home', style: style),
+        ],
+      );
+    } else {
+      hint = const Row(
+        key: ValueKey('more'),
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('All Apps', style: style),
+          SizedBox(width: 4),
+          Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white38, size: 20),
+        ],
+      );
+    }
     return SizedBox(
       height: 24,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 180),
-        child: moving
-            ? const Center(
-                key: ValueKey('moving'),
-                child: Text('OK to place   ·   Back to cancel   ·   Hold OK to remove from Home', style: style),
-              )
-            : const Row(
-                key: ValueKey('more'),
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('All Apps', style: style),
-                  SizedBox(width: 4),
-                  Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white38, size: 20),
-                ],
-              ),
-      ),
+      child: AnimatedSwitcher(duration: const Duration(milliseconds: 220), child: hint),
     );
   }
 }
@@ -411,13 +567,15 @@ void _ensureVisible(BuildContext context) {
   }
 }
 
-/// An app in a slot. OK opens it; holding OK asks the parent for the app's menu.
+/// An app in a slot. OK opens it; holding OK hands the app to the parent ([onHold]).
 /// While [moving], arrows move it instead of focus, OK places it and Back cancels.
 class HomeTile extends StatefulWidget {
   final App app;
   final bool autofocus;
-  final bool upGoesToSettings;
   final FocusNode? focusNode;
+
+  /// Pressing Up (top row only): where focus goes instead of the row above.
+  final VoidCallback? onUp;
 
   /// Replaces the default "scroll just enough to show me" when this tile gains focus.
   final VoidCallback? onFocus;
@@ -438,7 +596,7 @@ class HomeTile extends StatefulWidget {
     super.key,
     required this.app,
     this.autofocus = false,
-    this.upGoesToSettings = false,
+    this.onUp,
     this.focusNode,
     this.onFocus,
     this.onBack,
@@ -693,8 +851,8 @@ class _HomeTileState extends State<HomeTile> with SingleTickerProviderStateMixin
       _launch();
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.arrowUp && widget.upGoesToSettings) {
-      Actions.invoke(context, const MoveFocusToSettingsIntent());
+    if (key == LogicalKeyboardKey.arrowUp && widget.onUp != null) {
+      widget.onUp!();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
