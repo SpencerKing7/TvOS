@@ -26,6 +26,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _appHighlightAnimationEnabledKey = "app_highlight_animation_enabled";
 const _appKeyClickEnabledKey = "app_key_click_enabled";
 const _autoHideAppBarKey = "auto_hide_app_bar";
+const _homeFavoritesSeededKey = "home_favorites_seeded";
 const _gradientUuidKey = "gradient_uuid";
 const _backButtonActionKey = "back_button_action";
 const _dateFormatKey = "date_format";
@@ -149,6 +150,12 @@ class SettingsService extends ChangeNotifier {
 
   bool get autoHideAppBarEnabled => _autoHideAppBarEnabled;
 
+  /// Whether the home screen has filled Favorites once. After that the user owns the list,
+  /// so emptying it on purpose doesn't bring the defaults back.
+  bool get homeFavoritesSeeded => _sharedPreferences.getBool(_homeFavoritesSeededKey) ?? false;
+
+  Future<void> setHomeFavoritesSeeded() => _sharedPreferences.setBool(_homeFavoritesSeededKey, true);
+
   bool get showCategoryTitles => _showCategoryTitles;
 
   bool get showCategoryAppCount => _showCategoryAppCount;
@@ -226,7 +233,7 @@ class SettingsService extends ChangeNotifier {
   void reload() {
     _appHighlightAnimationEnabled = _sharedPreferences.getBool(_appHighlightAnimationEnabledKey) ?? true;
     _appKeyClickEnabled = _sharedPreferences.getBool(_appKeyClickEnabledKey) ?? true;
-    _autoHideAppBarEnabled = _sharedPreferences.getBool(_autoHideAppBarKey) ?? false;
+    _autoHideAppBarEnabled = _sharedPreferences.getBool(_autoHideAppBarKey) ?? true;
     _showCategoryTitles = _sharedPreferences.getBool(_showCategoryTitlesKey) ?? true;
     _showCategoryAppCount = _sharedPreferences.getBool(_showCategoryAppCountKey) ?? false;
     _showAppNamesBelowIcons = _sharedPreferences.getBool(_showAppNamesBelowIconsKey) ?? false;

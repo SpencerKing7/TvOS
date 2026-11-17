@@ -91,6 +91,19 @@ class AppsService extends ChangeNotifier {
       .toList(growable: false);
   SettingsService? get settingsService => _settingsService;
 
+  Map<String, int> _foregroundTime = const {};
+
+  /// Package name → ms in the foreground (last 90 days). Empty until usage access is granted.
+  Map<String, int> get foregroundTime => _foregroundTime;
+
+  Future<void> refreshForegroundTime() async {
+    final times = await _fLauncherChannel.getAppForegroundTime();
+    if (!mapEquals(times, _foregroundTime)) {
+      _foregroundTime = times;
+      notifyListeners();
+    }
+  }
+
   AppsService(this._fLauncherChannel, this._database, [this._settingsService]) {
     _init();
   }
@@ -726,6 +739,15 @@ class AppsService extends ChangeNotifier {
     }
 
     return favorites.applications.any((a) => a.packageName == app.packageName);
+  }
+
+  /// Adds several apps to Favorites in the given order, notifying once.
+  Future<void> addAllToFavorites(List<App> apps) async {
+    Category favorites = await getOrCreateFavoritesCategory();
+    final missing = apps
+        .where((app) => !favorites.applications.any((a) => a.packageName == app.packageName))
+        .toList();
+    await addAllToCategory(missing, favorites);
   }
 
   /// Adds an app to Favorites

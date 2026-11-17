@@ -26,6 +26,7 @@ import 'package:flauncher/widgets/apps_grid.dart';
 import 'package:flauncher/widgets/category_row.dart';
 import 'package:flauncher/widgets/launcher_alternative_view.dart';
 import 'package:flauncher/widgets/focus_aware_app_bar.dart';
+import 'package:flauncher/widgets/home/home_view.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flauncher/widgets/continue_watching_row.dart';
@@ -41,6 +42,9 @@ class FLauncher extends StatefulWidget {
   @override
   State<FLauncher> createState() => _FLauncherState();
 }
+
+// The upstream sectioned layout stays in place behind this switch so it can be compared.
+const bool _useHomeView = true;
 
 class _FLauncherState extends State<FLauncher> {
   final GlobalKey<FocusAwareAppBarState> _appBarKey = GlobalKey();
@@ -76,6 +80,9 @@ class _FLauncherState extends State<FLauncher> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: Consumer<AppsService>(
                   builder: (context, appsService, _) {
+                    if (appsService.initialized && _useHomeView) {
+                      return const HomeView();
+                    }
                     if (appsService.initialized) {
                       return Selector<WatchNextService, bool>(
                         selector: (_, watchNext) => watchNext.programs.isNotEmpty,
