@@ -47,7 +47,7 @@ TvOS is an ordinary app plus a small accessibility service that sends the remote
    ```
 5. The first time Home opens it asks to read TV listings: allow it, and the card beside the clock can also show **Continue watching** (the show or film you were last part-way through, in apps that publish it).
 
-After the TV restarts it briefly shows Google TV's own home first; the first press of **Home** brings TvOS back.
+When the TV restarts or wakes from standby, the same service brings TvOS back to the front by itself. You may see Google TV's own home for a moment first.
 
 To undo it, turn the accessibility service off or uninstall TvOS. Nothing about the TV's own launcher is changed.
 
