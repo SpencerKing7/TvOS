@@ -17,6 +17,7 @@ import 'package:flauncher/providers/apps_service.dart';
 import 'package:flauncher/providers/settings_service.dart';
 import 'package:flauncher/widgets/app_card_keys.dart';
 import 'package:flauncher/widgets/focus_keyboard_listener.dart';
+import 'package:flauncher/widgets/home/ambience.dart';
 import 'package:flauncher/widgets/home/top_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -70,6 +71,11 @@ class _HomeViewState extends State<HomeView> {
   void initState() {
     super.initState();
     _seedFavoritesOnce();
+    // Tell the background how far into All Apps we are, so it can dim behind the grid.
+    _scroll.addListener(() {
+      final height = MediaQuery.sizeOf(context).height;
+      context.read<HomeAmbience>().allApps = _scroll.offset / (height * 0.7);
+    });
   }
 
   /// Fills Favorites on first run: the pinned five, then the most-watched apps.
@@ -634,8 +640,27 @@ class _HomeTileState extends State<HomeTile> with SingleTickerProviderStateMixin
     return KeyEventResult.handled;
   }
 
+  Offset? _screenCenter() {
+    if (!mounted) return null;
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.attached) return null;
+    return box.localToGlobal(box.size.center(Offset.zero));
+  }
+
   void _onFocusChange(bool focused) {
     setState(() => _focused = focused);
+    if (focused) {
+      final ambience = context.read<HomeAmbience>();
+      _image.then((image) {
+        final center = _screenCenter();
+        if (_focused && center != null) ambience.focus(widget.app.packageName, image.$2, center);
+      });
+      // If focusing scrolled the page, report where the tile settled.
+      Future.delayed(const Duration(milliseconds: 340), () {
+        final center = _screenCenter();
+        if (_focused && center != null) ambience.moveFocus(widget.app.packageName, center);
+      });
+    }
     // Leaving the tile mid-move (e.g. pressing Home) keeps the new position.
     if (!focused && widget.moving) widget.onMoveDone?.call(true);
     if (focused) (widget.onFocus ?? () => _ensureVisible(context))();
