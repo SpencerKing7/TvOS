@@ -1,230 +1,93 @@
-# LTvLauncher
+# TvOS
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner_dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset=".github/assets/banner_light.svg">
-  <img alt="LTvLauncher Banner" src=".github/assets/banner_light.svg">
-</picture>
+A calm, minimal home screen for Google TV and Android TV, made to feel like Apple TV's: your apps, the time and the weather, over a slow-moving background. No ads, no rows of recommendations, nothing you didn't put there.
 
-<div align="center">
+![The TvOS home screen: time, date and weather in the corner, ten apps in two rows over a misty mountain sunrise](docs/images/tvos-home.jpg)
 
-[![Latest Release](https://img.shields.io/github/v/release/leanbitlab-org/LtvLauncher?style=flat-square&color=4f46e5&label=Release)](https://github.com/leanbitlab-org/LtvLauncher/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/leanbitlab-org/LtvLauncher/total?style=flat-square&color=059669&label=Downloads)](https://github.com/leanbitlab-org/LtvLauncher/releases)
-[![Stars](https://img.shields.io/github/stars/leanbitlab-org/LtvLauncher?style=flat-square&color=dc2626&label=Stars)](https://github.com/leanbitlab-org/LtvLauncher/stargazers)
-[![License: GPL v3](https://img.shields.io/badge/License-GPL_v3-blue.svg?style=flat-square)](https://www.gnu.org/licenses/gpl-3.0)
-[![Sponsor](https://img.shields.io/badge/Sponsor-LeanBitLab-db2777?style=flat-square&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/LeanBitLab)
-[![Donate on Open Collective](https://img.shields.io/badge/Donate-Open_Collective-1f6feb?style=flat-square&logo=opencollective&logoColor=white)](https://opencollective.com/leanbitlab-org)
+## What's on the screen
 
-**A fast, private, and customizable open-source launcher for Android TV.**  
-*Forked from [FLauncher](https://github.com/osrosal/flauncher) (originally by [etienn01](https://gitlab.com/flauncher/flauncher)).*
+- **Your ten apps** in two rows of five, in the order you choose. The focused app lifts and glows. There are no labels; the artwork is enough.
+- **All Apps** sits below, behind a quiet "All Apps ⌄" hint: every app on the TV, alphabetical.
+- **Time, date and weather** in the top-left corner: the current temperature with today's high and low.
+- **A background** of your choice, picked from the small dot in the top-right corner:
+  - **Gradient**: colors that follow the time of day, with a soft glow in the focused app's color behind it.
+  - **Landscapes**: still photos that drift slowly, credited in the corner.
+  - **Video loops**: calm footage of clouds, mist, mountains and desert, slowed to 0.4× so it looks like a picture that's barely moving. Each clip stays about 50 seconds, then dissolves into the next.
 
-[Screenshots](#-screenshots) • [Download APKs](#-download) • [Features](#-features) • [Setup Guide](#-setup-guide) • [Community](#-community--contributing) • [Other Projects](https://github.com/LeanBitLab#-android-projects)
+The TV's screensaver stays away while the home screen is showing (for up to two hours without a button press). Your background and app order are saved on the TV and survive power-offs and updates.
 
-</div>
+## Using it with the remote
 
----
+| To | Do |
+| --- | --- |
+| Open an app | Select it and press **OK** |
+| Rearrange the Home rows | Hold **OK** on an app, move it with the arrows, press **OK** to drop it (**Back** cancels) |
+| Take an app off Home | Hold **OK** to pick it up, then hold **OK** again |
+| Put an app on Home | In All Apps, hold **OK** on it |
+| Reach All Apps | Press **Down** past the second row |
+| Come back from All Apps | **Back**, or **Up** from the top row |
+| Change the background | Select the dot in the top-right corner |
 
-## 🚀 Overview
+### Adding new apps
 
-**LTvLauncher** is an open-source, private, and ad-free launcher designed specifically for Android TV, Google TV, and Fire TV devices. Built with Flutter, it delivers a responsive, remote-friendly interface focused on simplicity, speed, and deep customization.
+Install apps the usual way, with **Google Play Store** (it's in All Apps). A new app shows up in All Apps by itself, in alphabetical order. Hold **OK** on it to put it on Home.
 
-With native D-pad navigation, recency-sorted Continue Watching rows, customizable categories, dynamic weather & status bar widgets, TV input source switching, system-wide notification overlays, and OLED screensavers, LTvLauncher gives you total control over your TV home screen without intrusive ads or algorithmic noise.
+## Installing on a TV
 
----
+TvOS is an ordinary app plus a small accessibility service that sends the remote's **Home** button to it. Google TV doesn't let you pick a different home screen, so the service is what makes it stick.
 
-## 📸 Screenshots
+1. Build and sign a release APK (below), then install it over the network with `adb install`.
+2. On the TV, open **Settings → System → Accessibility**, select **TvOS Home Button** under **Services**, turn on **Enable** and choose **Allow**.
+3. Press **Home** from any app. You should land on TvOS.
 
-<table>
-  <tr>
-    <td align="center"><b>Home Screen</b></td>
-    <td align="center"><b>Settings Overview</b></td>
-    <td align="center"><b>Category & Layout</b></td>
-    <td align="center"><b>Accessibility & Remap</b></td>
-    <td align="center"><b>OLED Screensaver</b></td>
-  </tr>
-  <tr>
-    <td><img src="docs/images/screenshot_1.png" width="180" alt="Home Screen"/></td>
-    <td><img src="docs/images/screenshot_2.png" width="180" alt="Settings Overview"/></td>
-    <td><img src="docs/images/screenshot_3.png" width="180" alt="Category & Layout"/></td>
-    <td><img src="docs/images/screenshot_4.png" width="180" alt="Accessibility & Remap"/></td>
-    <td><img src="docs/images/screensaver.gif" width="180" alt="OLED Screensaver"/></td>
-  </tr>
-</table>
+After the TV restarts it briefly shows Google TV's own home first; the first press of **Home** brings TvOS back.
 
----
+To undo it, turn the accessibility service off or uninstall TvOS. Nothing about the TV's own launcher is changed.
 
-## ✨ Features
+## Building
 
-### 🎬 Continue Watching & Channels
-- **Smart Recency Sorting**: Automatically aggregates and sorts Watch Next program cards by their latest playback timestamp, ensuring your most recently watched shows and movies always appear first.
-- **Theme-Adaptive Cards**: Media cards automatically adapt to the active visual style, including glowing focus indicators, border outlines, and corner radiuses.
-- **Clean Settings Configuration**: Toggle the Continue Watching channel directly from Settings without cluttering the home screen with persistent permission warnings.
+You need Flutter 3.24 and the Android SDK.
 
-### 🌤️ Status Bar & Weather Integration
-- **Breezy Weather Integration**: Seamless support for local weather forecasts via Breezy Weather and Open-Meteo.
-- **Smart Unit Conversion**: Automatic Kelvin-to-Celsius/Fahrenheit auto-detection and conversion to prevent temperature anomalies.
-- **Weather Indicators**: Configurable precipitation/rain warning icons and customizable refresh intervals.
-- **Live Data Consumption Tracker**: Monitor daily network bandwidth (WiFi, Ethernet, or Mobile) directly from the status bar.
-- **Quick WiFi Shortcut**: Network status icon doubles as a 1-click shortcut to system WiFi settings.
-- **Stable Focus Traversal**: Precise remote focus alignment preventing focus jumps when navigating the status bar.
-
-### 🔔 System Notifications & TV Keypad Control
-- **Global Floating Overlays**: Receive real-time notification alerts overlaid across any running TV app.
-- **Notification Drawer**: Dedicated remote-friendly panel to view, inspect, and manage system notifications.
-- **Intuitive Blocked Apps Manager**: Clean TV remote D-pad controls (Up/Down navigation, Left/Right quick removal, and Clear All) to block unwanted notifications.
-
-### 🎨 Themes, Customization & Banners
-- **4 Distinct Visual Themes**: Choose between **Modern / Default**, **Premium**, **Classic**, and **Capsule** card styles.
-- **Accent Color Engine**: Personalize the launcher with multiple vibrant color swatches and presets.
-- **Dynamic Wallpapers**: Time-based automatic switching between day and night backgrounds, or a true pitch-black background for OLED displays.
-- **Custom Banner Support**: Assign custom banner images to sideloaded and unthemed Android TV apps.
-- **High-Visibility Focus Indicators**: Double-border focus indicator ensuring sharp cursor visibility on any background, complete with edge bump resistance.
-
-### 📺 TV Inputs & Accessibility
-- **Hardware Input Source Selector**: Quickly switch between HDMI 1, HDMI 2, AV, and component inputs directly from the launcher.
-- **Built-in Home Button Fix**: Seamless accessibility remapper service for Google TV and Fire TV devices that override default launchers.
-- **Burn-in Protection Screensaver**: Minimal OLED screensaver with 30-second clock position shifting.
-- **Audio Feedback**: Remote key navigation sound feedback.
-
-### 💾 Privacy & Data Management
-- **100% Ad-Free & Private**: No analytics, no ads, no trackers, zero network telemetry.
-- **Multiple Backups & Restore Dialog**: Export configuration backups with timestamps and restore them via a D-pad friendly picker.
-- **Category Customization**: Reorder, rename, hide, and organize apps in grid or row layouts with remote arrow keys.
-
----
-
-## 📥 Download
-
-<table border="0">
-  <tr>
-    <td align="center" valign="middle">
-      <a href="https://github.com/leanbitlab-org/LtvLauncher/releases/latest">
-        <img alt="Get it on GitHub" src=".github/assets/get_it_on_github.png" height="75">
-      </a>
-    </td>
-    <td align="center" valign="middle">
-      <a href="https://apt.izzysoft.de/fdroid/index/apk/com.leanbitlab.ltvL">
-        <img alt="Get it on IzzyOnDroid" src=".github/assets/IzzyOnDroid.png" height="75">
-      </a>
-    </td>
-    <td align="center" valign="middle">
-      <a href="https://go.aftvnews.com">
-        <img alt="Downloader Code: 7259827" src=".github/assets/get_it_on_downloader.png" height="75">
-      </a>
-    </td>
-    <td align="center" valign="middle">
-      <a href="https://github.com/leanbitlab-org/LtvLauncher/releases">
-        <img alt="Pre-release" src=".github/badges/prerelease.png" height="75">
-      </a>
-    </td>
-  </tr>
-</table>
-
-### Architecture Matrix
-
-| File | Target Devices | Architecture |
-|:---|:---|:---|
-| **`LTvLauncher-universal-release.apk`** | **Recommended** for any Android TV or Fire TV device | Universal |
-| **`LTvLauncher-arm64-v8a-release.apk`** | Chromecast with Google TV (4K/HD), Nvidia Shield TV, newer smart TVs | 64-bit ARM (`arm64-v8a`) |
-| **`LTvLauncher-armeabi-v7a-release.apk`** | Fire TV Stick (Lite, 4K, 4K Max), older smart TVs, budget boxes | 32-bit ARM (`armeabi-v7a`) |
-
-> [!TIP]
-> **Fast Installation via the Downloader App (Fire TV & Android TV)**:
-> 1. Open the **Downloader** app by AFTVnews on your TV (available on Amazon Appstore & Google Play Store).
-> 2. Enter quick code **`7259827`** in the URL / search box.
-> 3. Downloader will automatically download and prompt you to install the latest LTvLauncher release.
-
----
-
-## 🛠️ Setup Guide
-
-### Method 1: Via Built-in Settings (Recommended for Android TV)
-This is the easiest and native way:
-1. Open **Settings -> Accessibility -> Set as default launcher**.
-2. Select **LTvLauncher** from the system home app picker or default apps list.
-
-> [!NOTE]
-> On **Google TV**, the stock launcher (`com.google.android.apps.tv.launcherx`) registers its HOME intent with priority 2, which overrides third-party launcher selections. If your device returns to Google TV when pressing Home, use **Method 2**.
-
-### Method 2: Home Button Fix (Google TV & Fire TV)
-If your device blocks changing the default launcher, use LTvLauncher's built-in Home Button Fix:
-1. Open **Settings -> Accessibility**.
-2. Select **Home Button Fix (Google TV)**.
-3. Turn on the accessibility service for **LTvLauncher** in your system settings.
-
-Once enabled, LTvLauncher automatically intercepts Home button presses and brings you straight to your custom home screen.
-
-### Method 3: Remap the Home button via Key Mapper
-If you prefer key remapping:
-1. Install [Key Mapper](https://github.com/keymapperorg/KeyMapper).
-2. Create a trigger for your remote's **Home** button.
-3. Bind the action to launch **LTvLauncher**.
-
-### Method 4: Disable the default launcher via ADB
-
-> [!WARNING]
-> Disabling system packages carries risks. Proceed with caution and ensure you have ADB debugging enabled on your TV.
-
-Connect your computer to your TV via ADB (`adb connect <tv-ip-address>`) and run:
-
-```shell
-# Disable the default Google TV launcher
-$ adb shell pm disable-user --user 0 com.google.android.apps.tv.launcherx
-
-# Disable setup fallback to prevent auto-reenabling
-$ adb shell pm disable-user --user 0 com.google.android.tungsten.setupwraith
+```bash
+flutter build apk --release --target-platform android-arm
 ```
 
-To re-enable the default launcher at any time:
-```shell
-$ adb shell pm enable com.google.android.apps.tv.launcherx
-$ adb shell pm enable com.google.android.tungsten.setupwraith
+The APK lands in `build/app/outputs/flutter-apk/`. Release builds are signed with a key kept outside the repo, read from `~/.android/tvos-signing.properties`:
+
+```properties
+storeFile=/path/to/your-release.jks
+storePassword=...
+keyAlias=...
+keyPassword=...
 ```
 
----
+Keep that key safe: every update to an installed TvOS must be signed with the same one, or Android will make you uninstall it first (losing your app order).
 
-## 📱 More Android Projects by LeanBitLab
+The weather location is set in [`lib/widgets/home/top_info.dart`](lib/widgets/home/top_info.dart). Change the latitude and longitude to your own city.
 
-Discover our complete suite of privacy-first, open-source Android applications and utilities:  
-👉 **[Explore All LeanBitLab Android Projects](https://github.com/LeanBitLab#-android-projects)**
+Before merging a change, run the checks:
 
----
+```bash
+scripts/verify.sh
+```
 
-## 🤝 Community & Contributing
+It generates the test mocks, then runs the analyzer and the full test suite.
 
-- **Bug Reports & Feature Requests**: [Open a GitHub Issue](https://github.com/leanbitlab-org/LtvLauncher/issues)
-- **Discussions & Feedback**: [GitHub Discussions](https://github.com/leanbitlab-org/LtvLauncher/discussions)
-- **Official Telegram Channel**: [@LeanBitLab](https://t.me/leanbitlab)
+## Privacy
 
----
+TvOS talks to two services, and only for the background and the weather:
 
-## 💖 Support the Project
+- **[Open-Meteo](https://open-meteo.com)**, for the weather, sent a city-level location every 30 minutes.
+- **[Pexels](https://www.pexels.com)**, to download the video clips once; after that they play from the TV's storage.
 
-Building and maintaining a lightweight, ad-free Android TV launcher requires hardware testing across various TV chipsets, display profiles, and continuous development.
+There are no accounts, no analytics and no ads.
 
-If LTvLauncher improves your daily TV experience, please consider supporting our work!
+## Credits
 
-<div align="left">
-  <a href="https://github.com/sponsors/LeanBitLab">
-    <img src="https://img.shields.io/static/v1?label=Sponsor%20on%20GitHub&message=%E2%9D%A4&logo=GitHub&color=%23db2777" height="38" alt="Sponsor LeanBitLab on GitHub"/>
-  </a>
-  &nbsp;&nbsp;
-  <a href="https://opencollective.com/leanbitlab-org">
-    <img src="https://img.shields.io/static/v1?label=Donate%20on&message=Open%20Collective&logo=opencollective&logoColor=white&color=%231f6feb" height="38" alt="Donate to LeanBitLab on Open Collective"/>
-  </a>
-</div>
+TvOS is built on [LTvLauncher](https://github.com/leanbitlab-org/LtvLauncher) by LeanBitLab, itself a fork of [FLauncher](https://gitlab.com/flauncher/flauncher) by Étienne Fesser (via [osrosal's fork](https://github.com/osrosal/flauncher)).
 
----
+Video clips are from [Pexels](https://www.pexels.com). Landscape photos are from Wikimedia Commons, credited in [`assets/landscapes/CREDITS.md`](assets/landscapes/CREDITS.md).
 
-## 📜 Credits & Acknowledgments
+## License
 
-- **[FLauncher](https://gitlab.com/flauncher/flauncher)** by [etienn01](https://github.com/etienn01) — The original TV launcher project.
-- **[FLauncher (Fork)](https://github.com/osrosal/flauncher)** by [osrosal](https://github.com/osrosal) — The foundation for this fork.
-- All [contributors](https://github.com/leanbitlab-org/LtvLauncher/graphs/contributors) and open-source supporters!
-
----
-
-## ⚖️ License
-
-LTvLauncher is licensed under the **GNU General Public License v3.0 (GPL-3.0)**.  
-See the [LICENSE](LICENSE) file for details.
+GNU General Public License v3.0. See [LICENSE](LICENSE).
