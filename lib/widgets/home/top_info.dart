@@ -27,7 +27,10 @@ const homeTextShadows = [
 
 /// The always-on top of the home screen: time, date and the current temperature.
 class TopInfo extends StatefulWidget {
-  const TopInfo({super.key});
+  /// One quiet line (time · date · weather), for when Now playing takes the top half.
+  final bool compact;
+
+  const TopInfo({super.key, this.compact = false});
 
   @override
   State<TopInfo> createState() => _TopInfoState();
@@ -103,9 +106,48 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
     }
   }
 
-  /// Large time | hairline | date over weather, the right side matching the time's height.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 500),
+        layoutBuilder: (current, previous) => Stack(
+          alignment: Alignment.topLeft,
+          children: [...previous, if (current != null) current],
+        ),
+        child: widget.compact ? KeyedSubtree(key: const ValueKey('compact'), child: _compact()) : KeyedSubtree(key: const ValueKey('full'), child: _full()),
+      );
+
+  /// Time · date · weather on one line, small enough to sit above Now playing.
+  Widget _compact() {
+    final weather = _weather;
+    const quiet = TextStyle(color: Colors.white70, fontSize: 20, fontWeight: FontWeight.w400, shadows: homeTextShadows);
+    Widget dot() => Container(
+          margin: const EdgeInsets.symmetric(horizontal: 14),
+          width: 4,
+          height: 4,
+          decoration: const BoxDecoration(color: Colors.white38, shape: BoxShape.circle),
+        );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          DateFormat('h:mm').format(_now),
+          style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w300, shadows: homeTextShadows),
+        ),
+        dot(),
+        Text(DateFormat('EEE d MMM').format(_now), style: quiet),
+        if (weather != null) ...[
+          dot(),
+          Icon(weather.icon, color: Colors.white70, size: 20, shadows: homeTextShadows),
+          const SizedBox(width: 6),
+          Text('${weather.temperature}°', style: quiet),
+        ],
+      ],
+    );
+  }
+
+  /// Large time | hairline | date over weather, the right side matching the time's height.
+  Widget _full() {
     final weather = _weather;
     return IntrinsicHeight(
       child: Row(
