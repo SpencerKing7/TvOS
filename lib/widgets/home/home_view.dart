@@ -124,6 +124,8 @@ class _HomeViewState extends State<HomeView> {
   final GlobalKey _allAppsHeader = GlobalKey();
   final FocusNode _menuNode = FocusNode(debugLabel: 'home menu');
   final FocusNode _slotNode = FocusNode(debugLabel: 'home slot');
+  // The slot moves between two layouts as music starts and stops; the key carries it (and its focus) across.
+  final GlobalKey _slotKey = GlobalKey();
 
   /// Continue watching needs the TV-listings permission; ask for it once, the first time Home opens.
   Future<void> _askForWatchNextOnce() async {
@@ -219,6 +221,16 @@ class _HomeViewState extends State<HomeView> {
         apps: {for (final app in home) app.packageName});
     // The slot emptied under focus (nothing left to show): drop back to the apps below it.
     if (slots.isEmpty && _slotNode.hasFocus) _focusHomeSlot(_slotColumn);
+    final heroMusic = HomeSlot.leadsWithMusic(slots);
+    final slot = HomeSlot(
+      key: _slotKey,
+      entries: slots,
+      hero: heroMusic,
+      focusNode: _slotNode,
+      onSelect: _openSlot,
+      onDown: () => _focusHomeSlot(_slotColumn),
+      onRight: _menuNode.requestFocus,
+    );
 
     return SingleChildScrollView(
       controller: _scroll,
@@ -248,22 +260,31 @@ class _HomeViewState extends State<HomeView> {
                           child: Padding(
                             // The menu button sits out past the content margin, so a little room is enough.
                             padding: const EdgeInsets.only(top: 18, right: 24),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const TopInfo(),
-                                const SizedBox(width: 44),
-                                Flexible(
-                                  child: HomeSlot(
-                                    entries: slots,
-                                    focusNode: _slotNode,
-                                    onSelect: _openSlot,
-                                    onDown: () => _focusHomeSlot(_slotColumn),
-                                    onRight: _menuNode.requestFocus,
+                            child: heroMusic
+                                // Music playing: a one-line clock, and Now playing across the top half.
+                                ? Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      const Align(alignment: Alignment.centerLeft, child: TopInfo(compact: true)),
+                                      const SizedBox(height: 22),
+                                      slot,
+                                    ],
+                                  )
+                                // Otherwise the full clock on the left, and recent things down the right,
+                                // clear of the menu button.
+                                : Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const TopInfo(),
+                                      const SizedBox(width: 44),
+                                      Expanded(
+                                        child: Align(
+                                          alignment: Alignment.topRight,
+                                          child: Padding(padding: const EdgeInsets.only(top: 52), child: slot),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ],
-                            ),
                           ),
                         ),
                       ),

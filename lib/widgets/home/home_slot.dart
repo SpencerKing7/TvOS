@@ -105,12 +105,20 @@ class HomeSlot extends StatefulWidget {
   static const double _minWidth = TrackCard.artSize + 18 + 80;
 
   final List<SlotEntry> entries;
+
+  /// Lay the playing song out large across the width, the rest small at the bottom right.
+  final bool hero;
   final FocusNode? focusNode;
   final ValueChanged<SlotEntry>? onSelect;
   final VoidCallback? onDown;
   final VoidCallback? onRight;
 
-  const HomeSlot({super.key, required this.entries, this.focusNode, this.onSelect, this.onDown, this.onRight});
+  const HomeSlot(
+      {super.key, required this.entries, this.hero = false, this.focusNode, this.onSelect, this.onDown, this.onRight});
+
+  /// Whether [entries] lead with a song playing right now, the one case that takes the hero layout.
+  static bool leadsWithMusic(List<SlotEntry> entries) =>
+      entries.isNotEmpty && entries.first is SlotTrack && (entries.first as SlotTrack).playing;
 
   @override
   State<HomeSlot> createState() => _HomeSlotState();
@@ -156,9 +164,61 @@ class _HomeSlotState extends State<HomeSlot> {
         SlotWatch(:final program) => WatchCard(key: ValueKey(entry.key), program: program, focused: focused),
       };
 
+  Widget _place(int i, Widget Function(SlotEntry entry, bool focused) card) => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 600),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        layoutBuilder: (current, previous) => Stack(
+          alignment: Alignment.centerLeft,
+          children: [...previous, if (current != null) current],
+        ),
+        child: i < widget.entries.length
+            ? card(widget.entries[i], _focused && i == _index)
+            : SizedBox.shrink(key: ValueKey('empty$i')),
+      );
+
+  Widget _stack() => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Each place crossfades on its own, so music starting only changes what moves.
+          for (var i = 0; i < slotPlaces; i++) ...[
+            if (i > 0 && i < widget.entries.length) const SizedBox(height: 14),
+            _place(i, _card),
+          ],
+        ],
+      );
+
+  /// The playing song large on the left; whatever else there is, small, at the bottom right.
+  Widget _heroLayout() {
+    final top = widget.entries.first as SlotTrack;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: NowPlayingHero(
+              key: ValueKey(top.key),
+              track: top.track,
+              progress: top.progress,
+              focused: _focused && _index == 0,
+            ),
+          ),
+        ),
+        for (var i = 1; i < slotPlaces; i++)
+          if (i < widget.entries.length) ...[
+            const SizedBox(width: 32),
+            _place(i, _card),
+          ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final entries = widget.entries;
+    final hero = widget.hero && HomeSlot.leadsWithMusic(entries);
     return LayoutBuilder(
       // Too narrow for the art and a few words: show nothing (and take no focus) rather than a squashed card.
       builder: (context, constraints) => constraints.maxWidth < HomeSlot._minWidth
@@ -172,31 +232,89 @@ class _HomeSlotState extends State<HomeSlot> {
                 if (!focused) _index = 0;
               }),
               onKeyEvent: _onKey,
+              child: hero ? _heroLayout() : _stack(),
+            ),
+    );
+  }
+}
+
+/// Now playing as the main attraction: large art, title, artist and progress.
+class NowPlayingHero extends StatelessWidget {
+  static const double artSize = 150;
+
+  final Track track;
+  final TrackProgress? progress;
+  final bool focused;
+
+  const NowPlayingHero({super.key, required this.track, this.progress, this.focused = false});
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedScale(
+            scale: focused ? 1.04 : 1,
+            duration: const Duration(milliseconds: 160),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: artSize,
+              height: artSize,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A2E),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: focused ? Colors.white : Colors.transparent, width: 2),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(focused ? 0.55 : 0.45), blurRadius: focused ? 30 : 24, offset: const Offset(0, 8)),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: track.art == null
+                  ? const _Glyph(Icons.music_note_rounded)
+                  : Image.memory(
+                      track.art!,
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                      filterQuality: FilterQuality.medium,
+                      errorBuilder: (_, __, ___) => const _Glyph(Icons.music_note_rounded),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 28),
+          Flexible(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Each place crossfades on its own, so music starting only changes what moves.
-                  for (var i = 0; i < slotPlaces; i++) ...[
-                    if (i > 0 && i < entries.length) const SizedBox(height: 14),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 600),
-                      switchInCurve: Curves.easeOut,
-                      switchOutCurve: Curves.easeIn,
-                      layoutBuilder: (current, previous) => Stack(
-                        alignment: Alignment.centerLeft,
-                        children: [...previous, if (current != null) current],
-                      ),
-                      child: i < entries.length
-                          ? _card(entries[i], _focused && i == _index)
-                          : SizedBox.shrink(key: ValueKey('empty$i')),
+                  const Text(
+                    'NOW PLAYING',
+                    style: TextStyle(color: Colors.white60, fontSize: 13, letterSpacing: 2, fontWeight: FontWeight.w600, shadows: homeTextShadows),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    track.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w500, height: 1.15, shadows: homeTextShadows),
+                  ),
+                  if (track.artist.isNotEmpty)
+                    Text(
+                      track.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white70, fontSize: 22, shadows: homeTextShadows),
                     ),
+                  if (progress != null) ...[
+                    const SizedBox(height: 6),
+                    TrackProgressBar(progress!, width: 360),
                   ],
                 ],
               ),
             ),
-    );
-  }
+          ),
+        ],
+      );
 }
 
 /// Album art beside the song and artist; dimmed once it is no longer playing.
@@ -236,12 +354,13 @@ class TrackCard extends StatelessWidget {
 
 /// A thin bar with elapsed and total time, moved forward locally each second.
 class TrackProgressBar extends StatefulWidget {
-  static const double width = 240;
+  static const double defaultWidth = 240;
 
   final TrackProgress progress;
+  final double width;
   final DateTime Function() now;
 
-  const TrackProgressBar(this.progress, {super.key, this.now = DateTime.now});
+  const TrackProgressBar(this.progress, {super.key, this.width = TrackProgressBar.defaultWidth, this.now = DateTime.now});
 
   @override
   State<TrackProgressBar> createState() => _TrackProgressBarState();
@@ -277,7 +396,7 @@ class _TrackProgressBarState extends State<TrackProgressBar> {
     final total = p.duration.inMilliseconds;
     const style = TextStyle(color: Colors.white60, fontSize: 13, fontFeatures: [FontFeature.tabularFigures()], shadows: homeTextShadows);
     return SizedBox(
-      width: TrackProgressBar.width,
+      width: widget.width,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -5,6 +5,7 @@ import 'package:flauncher/providers/now_playing_service.dart';
 import 'package:flauncher/providers/settings_service.dart';
 import 'package:flauncher/providers/watch_next_service.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
+import 'package:flauncher/widgets/home/home_slot.dart';
 import 'package:flauncher/widgets/home/home_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -61,9 +62,9 @@ void main() {
     expect(find.text('All Apps'), findsWidgets);
   });
 
-  // The test font is far wider than the TV's, so the clock leaves less room here than on the TV.
-  for (final (ratio, shows) in [(1.5, true), (2.0, false)]) {
-    testWidgets('a long song title never overflows beside the time (pixel ratio $ratio)', (tester) async {
+  // Playing music takes the top half's full width, so it shows at both of the TV's likely ratios.
+  for (final ratio in [1.5, 2.0]) {
+    testWidgets('a long song title never overflows in the Now playing hero (pixel ratio $ratio)', (tester) async {
       await _pumpHome(tester,
           pixelRatio: ratio,
           nowPlaying: Stream.value({
@@ -74,7 +75,7 @@ void main() {
           }));
 
       expect(tester.takeException(), isNull);
-      expect(find.text('NOW PLAYING'), shows ? findsOneWidget : findsNothing);
+      expect(find.byType(NowPlayingHero), findsOneWidget);
     });
   }
 
