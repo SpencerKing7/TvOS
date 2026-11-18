@@ -109,6 +109,13 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
   // The player position can't be trusted (see [_played]), so clips are timed on a clock.
   Timer? _ticker;
 
+  // Bumped whenever the players are let go; work started before then drops what it opens.
+  int _run = 0;
+  bool _stale(int run) => !mounted || run != _run;
+
+  // The first clip fades in from black (a black cover fades off it, see [build]).
+  bool _revealed = false;
+
   @override
   void initState() {
     super.initState();
@@ -132,13 +139,44 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Decoding video while an app is in front would cost the TV for nothing.
-    if (state == AppLifecycleState.resumed) {
-      _current?.play();
-      if (_current != null) _played.start();
-    } else {
-      _current?.pause();
-      _played.stop();
+    switch (state) {
+      case AppLifecycleState.resumed:
+        if (_current == null) {
+          _run++;
+          _start(_index + 1);
+        } else {
+          _current!.play();
+          _played.start();
+        }
+      case AppLifecycleState.inactive:
+        _current?.pause();
+        _played.stop();
+      // Home is off screen (an app in front, or the TV asleep): let the players go. Kept,
+      // they hold decoders and memory, and the plugin rebuilds every one of them when the
+      // screen comes back, restarting each clip. Home starts the next clip fresh instead.
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _release();
+    }
+  }
+
+  void _release() {
+    if (_current == null && _incoming == null) return;
+    _run++;
+    _fallback?.cancel();
+    _played.stop();
+    final gone = [_current, _incoming];
+    _current = null;
+    _incoming = null;
+    _incomingVisible = false;
+    _preparing = false;
+    _fading = false;
+    _revealed = false;
+    videoShowing.value = false;
+    if (mounted) setState(() {});
+    for (final controller in gone) {
+      controller?.dispose();
     }
   }
 
@@ -177,21 +215,27 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
 
   /// First clip: open it and show it straight away.
   Future<void> _start(int index) async {
+    final run = _run;
     final (controller, i) = await _open(index);
-    if (controller == null || !mounted) return controller?.dispose();
+    if (controller == null || _stale(run)) return controller?.dispose();
     final from = controller.value.position;
     await controller.play();
+    if (_stale(run)) return controller.dispose();
     _show(controller, i, from, Stopwatch()..start());
     setState(() => _current = controller);
     videoShowing.value = true;
+    // Uncover it once it's really producing pictures.
+    await _untilPlaying(controller);
+    if (!_stale(run)) setState(() => _revealed = true);
   }
 
   /// Opens the following clip, paused on its first frame, ready to fade in.
   Future<void> _prepareNext() async {
     _preparing = true;
+    final run = _run;
     final (controller, i) = await _open(_index + 1);
-    if (controller == null || !mounted) {
-      _preparing = false;
+    if (controller == null || _stale(run)) {
+      if (!_stale(run)) _preparing = false;
       return controller?.dispose();
     }
     setState(() => _incoming = controller); // joins the screen invisibly, attached before its fade
@@ -207,6 +251,7 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
     final next = _incoming;
     if (next == null || _fading) return;
     _fading = true;
+    final run = _run;
     // Timed from here: by the time the fade ends, a fragmented file's position may be stuck.
     final from = next.value.position;
     final clock = Stopwatch()..start();
@@ -215,10 +260,10 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
     // was opened partway in can take a moment, and fading in before then blends in a
     // black frame (a dark flash).
     await _untilPlaying(next);
-    if (!mounted) return;
+    if (_stale(run)) return;
     setState(() => _incomingVisible = true);
     await Future.delayed(_crossfade);
-    if (!mounted) return;
+    if (_stale(run)) return;
 
     final old = _current;
     _show(next, _incomingIndex, from, clock);
@@ -259,6 +304,7 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
   }
 
   void _forceNext() {
+    if (_current == null) return;
     if (!_onScreen) {
       _fallback = Timer(const Duration(seconds: 30), _forceNext);
       return;
@@ -336,6 +382,16 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
           duration: _crossfade,
           curve: Curves.easeInOut,
           child: _player(current),
+        ),
+        // Black over the first clip until it's moving, then fading off it (the same
+        // fade-out-on-top rule as above, so nothing pops).
+        IgnorePointer(
+          child: AnimatedOpacity(
+            opacity: _revealed ? 0 : 1,
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOut,
+            child: const ColoredBox(color: Colors.black),
+          ),
         ),
       ],
     );
