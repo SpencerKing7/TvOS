@@ -48,6 +48,17 @@ class HomeAmbience extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _moving = false;
+
+  /// An app is being moved: the move hint takes the bottom line, so the photo credit steps aside.
+  bool get moving => _moving;
+
+  set moving(bool value) {
+    if (value == _moving) return;
+    _moving = value;
+    notifyListeners();
+  }
+
   set allApps(double value) {
     final clamped = value.clamp(0.0, 1.0);
     if ((clamped - _allApps).abs() < 0.01) return;

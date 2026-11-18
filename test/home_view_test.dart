@@ -64,6 +64,22 @@ void main() {
     expect(find.text('All Apps'), findsWidgets);
   });
 
+  testWidgets('moving an app tells the background, so the photo credit steps aside', (tester) async {
+    await _pumpHome(tester);
+    final ambience = tester.element(find.byType(HomeView)).read<HomeAmbience>();
+    expect(ambience.moving, isFalse);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(ambience.moving, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(ambience.moving, isFalse);
+  });
+
   // Playing music takes the top half's full width, so it shows at both of the TV's likely ratios.
   for (final ratio in [1.5, 2.0]) {
     testWidgets('a long song title never overflows in the Now playing hero (pixel ratio $ratio)', (tester) async {
