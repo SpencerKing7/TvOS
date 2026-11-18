@@ -58,3 +58,8 @@ flutter:
   assets:
     - assets/icon.png
     - assets/landscapes/
+
+dependency_overrides:
+  # Patched for TvOS (third_party/video_player_android/TVOS.md): a small video buffer.
+  video_player_android:
+    path: third_party/video_player_android

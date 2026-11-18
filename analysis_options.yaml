@@ -5,6 +5,7 @@ analyzer:
     - lib/database.drift.dart
     - test/mocks.mocks.dart
     - test/generated_migrations
+    - third_party/**
 
 linter:
   rules:

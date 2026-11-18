@@ -136,12 +136,11 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
         if (!video)
           _painted(ambience, slides)
         else ...[
-          // A still gradient shows until the first clip is ready; once a clip covers the
-          // screen it isn't drawn at all (one less full-screen layer per video frame).
+          // Black until the first clip is ready (it fades in from black); once a clip covers
+          // the screen nothing is drawn under it.
           ValueListenableBuilder<bool>(
             valueListenable: videoShowing,
-            builder: (context, showing, _) =>
-                showing ? const SizedBox.shrink() : _painted(ambience, null, layer: _Layer.base, animate: false),
+            builder: (context, showing, _) => showing ? const SizedBox.shrink() : const ColoredBox(color: Colors.black),
           ),
           const VideoLoops(),
           _painted(ambience, null, layer: _Layer.overlays, animate: false),
@@ -268,6 +267,9 @@ class _AmbientPainter extends CustomPainter {
     if (layer != _Layer.overlays) {
       if (photo != null) {
         _paintLandscapes(canvas, size, t);
+      } else if (slides != null) {
+        // Landscapes, before the first photo has decoded: black, never a flash of gradient.
+        canvas.drawRect(Offset.zero & size, Paint()..color = Colors.black);
       } else {
         _paintGradient(canvas, size, t);
       }
@@ -284,7 +286,8 @@ class _AmbientPainter extends CustomPainter {
     if (s.previous != null && fade < 1) {
       _paintPhoto(canvas, size, s.previous!, t - s.previousShownAt, s.index - 1, 1);
     }
-    _paintPhoto(canvas, size, s.photo!, t - s.shownAt, s.index, s.previous == null ? 1 : fade);
+    // The first photo fades in from black too.
+    _paintPhoto(canvas, size, s.photo!, t - s.shownAt, s.index, fade);
     canvas.drawRect(Offset.zero & size, Paint()..color = Colors.black.withOpacity(0.18));
   }
 
