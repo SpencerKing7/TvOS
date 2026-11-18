@@ -12,6 +12,7 @@ import 'dart:ui';
 import 'package:flauncher/custom_traversal_policy.dart';
 import 'package:flauncher/providers/settings_service.dart';
 import 'package:flauncher/widgets/home/video_loops.dart';
+import 'package:flauncher/widgets/dev_tag.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -664,6 +665,7 @@ class _QuickPanelAppState extends State<QuickPanelApp> with SingleTickerProvider
   Widget build(BuildContext context) => MaterialApp(
         debugShowCheckedModeBanner: false,
         color: Colors.transparent,
+        builder: (context, child) => DevTag(child: child!),
         theme: ThemeData(brightness: Brightness.dark, scaffoldBackgroundColor: Colors.transparent),
         home: Scaffold(
           backgroundColor: Colors.transparent,

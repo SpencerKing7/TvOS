@@ -27,6 +27,7 @@ import 'package:flauncher/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 
 import 'flauncher.dart';
+import 'widgets/dev_tag.dart';
 
 class FLauncherApp extends StatelessWidget
 {
@@ -77,6 +78,7 @@ class FLauncherApp extends StatelessWidget
       supportedLocales: AppLocalizations.supportedLocales,
       localeListResolutionCallback: resolveAppLocale,
       title: 'FLauncher',
+      builder: (context, child) => DevTag(child: child!),
         theme: ThemeData(
           useMaterial3: true,
           brightness: Brightness.dark,
