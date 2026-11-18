@@ -25,30 +25,34 @@ const homeTextShadows = [
   Shadow(color: Colors.black45, blurRadius: 18),
 ];
 
-/// The always-on top of the home screen: time, date and the current temperature.
+/// Time · date · weather (now, high and low) on one quiet line at the top of Home.
 class TopInfo extends StatefulWidget {
-  /// One quiet line (time · date · weather), for when Now playing takes the top half.
-  final bool compact;
-
-  const TopInfo({super.key, this.compact = false});
+  const TopInfo({super.key});
 
   @override
   State<TopInfo> createState() => _TopInfoState();
 }
 
 class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
+  // The last forecast outlives any one TopInfo, so a rebuilt one starts with the weather line
+  // already there (no jump when it arrives) and only fetches once it's stale.
+  static _Weather? _cachedWeather;
+  static DateTime? _cachedAt;
+
   DateTime _now = DateTime.now();
-  _Weather? _weather;
+  _Weather? _weather = _cachedWeather;
   Timer? _clockTimer;
   Timer? _weatherTimer;
-  DateTime? _lastFetch;
+  DateTime? _lastFetch = _cachedAt;
+
+  bool get _stale => _lastFetch == null || DateTime.now().difference(_lastFetch!) > _weatherRefresh;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scheduleClock();
-    _fetchWeather();
+    if (_stale) _fetchWeather();
     _weatherTimer = Timer.periodic(_weatherRefresh, (_) => _fetchWeather());
   }
 
@@ -66,7 +70,7 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed) return;
     setState(() => _now = DateTime.now());
     _scheduleClock();
-    if (_lastFetch == null || DateTime.now().difference(_lastFetch!) > _weatherRefresh) _fetchWeather();
+    if (_stale) _fetchWeather();
   }
 
   /// Ticks exactly on each minute boundary.
@@ -96,7 +100,8 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
       if (response.statusCode != 200) return;
       final json = jsonDecode(await response.transform(utf8.decoder).join()) as Map<String, dynamic>;
       final weather = _Weather.fromJson(json);
-      _lastFetch = DateTime.now();
+      _lastFetch = _cachedAt = DateTime.now();
+      _cachedWeather = weather;
       if (mounted) setState(() => _weather = weather);
     } catch (e) {
       // Offline or the service is down: keep showing the last reading (or none).
@@ -106,18 +111,11 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => AnimatedSwitcher(
-        duration: const Duration(milliseconds: 500),
-        layoutBuilder: (current, previous) => Stack(
-          alignment: Alignment.topLeft,
-          children: [...previous, if (current != null) current],
-        ),
-        child: widget.compact ? KeyedSubtree(key: const ValueKey('compact'), child: _compact()) : KeyedSubtree(key: const ValueKey('full'), child: _full()),
-      );
+  /// Apple's short date, used everywhere on Home: "Tue Nov 17".
+  static String _date(DateTime now) => DateFormat('EEE MMM d').format(now);
 
-  /// Time · date · weather on one line, small enough to sit above Now playing.
-  Widget _compact() {
+  @override
+  Widget build(BuildContext context) {
     final weather = _weather;
     const quiet = TextStyle(color: Colors.white70, fontSize: 20, fontWeight: FontWeight.w400, shadows: homeTextShadows);
     Widget dot() => Container(
@@ -135,79 +133,21 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
           style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w300, shadows: homeTextShadows),
         ),
         dot(),
-        Text(DateFormat('EEE d MMM').format(_now), style: quiet),
+        Text(_date(_now), style: quiet),
         if (weather != null) ...[
           dot(),
           Icon(weather.icon, color: Colors.white70, size: 20, shadows: homeTextShadows),
           const SizedBox(width: 6),
           Text('${weather.temperature}°', style: quiet),
+          const SizedBox(width: 10),
+          Text(
+            'H ${weather.high}°  L ${weather.low}°',
+            style: const TextStyle(color: Colors.white54, fontSize: 16, shadows: homeTextShadows),
+          ),
         ],
       ],
     );
   }
-
-  /// Large time | hairline | date over weather, the right side matching the time's height.
-  Widget _full() {
-    final weather = _weather;
-    return IntrinsicHeight(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            DateFormat('h:mm').format(_now),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 102,
-              height: 1.0,
-              fontWeight: FontWeight.w200,
-              letterSpacing: -2,
-              shadows: homeTextShadows,
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-            width: 1,
-            color: Colors.white24,
-          ),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                DateFormat('EEE d').format(_now),
-                style: const TextStyle(color: Colors.white, fontSize: 31, fontWeight: FontWeight.w500, shadows: homeTextShadows),
-              ),
-              if (weather != null) _weatherLine(weather),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _weatherLine(_Weather weather) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(weather.icon, color: Colors.white, size: 29, shadows: homeTextShadows),
-          const SizedBox(width: 8),
-          Text(
-            '${weather.temperature}°',
-            style: const TextStyle(color: Colors.white, fontSize: 31, fontWeight: FontWeight.w400, shadows: homeTextShadows),
-          ),
-          const SizedBox(width: 12),
-          // Today's high over today's low, split by a hairline.
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('H ${weather.high}°', style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.1, shadows: homeTextShadows)),
-              Container(margin: const EdgeInsets.symmetric(vertical: 2), width: 36, height: 1, color: Colors.white24),
-              Text('L ${weather.low}°', style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.1, shadows: homeTextShadows)),
-            ],
-          ),
-        ],
-      );
 }
 
 class _Weather {

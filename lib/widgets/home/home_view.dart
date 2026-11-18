@@ -126,6 +126,8 @@ class _HomeViewState extends State<HomeView> {
   final FocusNode _slotNode = FocusNode(debugLabel: 'home slot');
   // The slot moves between two layouts as music starts and stops; the key carries it (and its focus) across.
   final GlobalKey _slotKey = GlobalKey();
+  // The clock keeps its state (and weather) however the top half rebuilds.
+  final GlobalKey _clockKey = GlobalKey();
 
   /// Continue watching needs the TV-listings permission; ask for it once, the first time Home opens.
   Future<void> _askForWatchNextOnce() async {
@@ -221,13 +223,12 @@ class _HomeViewState extends State<HomeView> {
         apps: {for (final app in home) app.packageName});
     // The slot emptied under focus (nothing left to show): drop back to the apps below it.
     if (slots.isEmpty && _slotNode.hasFocus) _focusHomeSlot(_slotColumn);
-    final heroMusic = HomeSlot.leadsWithMusic(slots);
     final slot = HomeSlot(
       key: _slotKey,
       entries: slots,
-      hero: heroMusic,
       focusNode: _slotNode,
       onSelect: _openSlot,
+      onControl: (action) => context.read<NowPlayingService>().control(action),
       onDown: () => _focusHomeSlot(_slotColumn),
       onRight: _menuNode.requestFocus,
     );
@@ -258,31 +259,16 @@ class _HomeViewState extends State<HomeView> {
                         child: Padding(
                             // The menu button sits out past the content margin, so a little room is enough.
                             padding: const EdgeInsets.only(top: 18, right: 24),
-                            child: heroMusic
-                                // Music playing: a one-line clock, and Now playing across the top half.
-                                ? Column(
-                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                    children: [
-                                      const Align(alignment: Alignment.centerLeft, child: TopInfo(compact: true)),
-                                      const SizedBox(height: 24),
-                                      Align(alignment: Alignment.centerLeft, child: slot),
-                                    ],
-                                  )
-                                // Otherwise the full clock, a hairline, then recent things, all flowing left
-                                // from one top edge.
-                                : Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const TopInfo(),
-                                      if (slots.isNotEmpty) ...[
-                                        const SizedBox(width: 40),
-                                        // As tall as the cards beside it: one card, or two and the gap between.
-                                        SlotDivider(height: slots.length > 1 ? TrackCard.artSize * 2 + 20 : TrackCard.artSize),
-                                        const SizedBox(width: 36),
-                                      ],
-                                      Flexible(child: slot),
-                                    ],
-                                  ),
+                            // The one-line clock over the hero spot, always; with nothing to show,
+                            // the rest of the top half is left to the background.
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Align(alignment: Alignment.centerLeft, child: TopInfo(key: _clockKey)),
+                                const SizedBox(height: 24),
+                                Align(alignment: Alignment.centerLeft, child: slot),
+                              ],
+                            ),
                         ),
                       ),
                       Align(

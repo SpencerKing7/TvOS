@@ -16,6 +16,8 @@ import android.net.Uri;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 /** Album art and posters other apps hand over as a bitmap or a local URI, made small for Dart. */
 final class ArtLoader {
@@ -33,6 +35,27 @@ final class ArtLoader {
             }
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    /**
+     * An http(s) image, for album art a media session hands over only as a web link. Called off
+     * the main thread; short timeouts, so a slow server costs a few seconds, not the art for good.
+     */
+    static Bitmap decodeWeb(String uri) {
+        if (uri == null || !(uri.startsWith("https://") || uri.startsWith("http://"))) return null;
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(uri).openConnection();
+            connection.setConnectTimeout(4000);
+            connection.setReadTimeout(6000);
+            try (InputStream in = connection.getInputStream()) {
+                return BitmapFactory.decodeStream(in);
+            }
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (connection != null) connection.disconnect();
         }
     }
 

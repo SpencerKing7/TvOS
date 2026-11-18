@@ -16,6 +16,7 @@ import 'package:flauncher/providers/apps_service.dart';
 import 'package:flauncher/providers/now_playing_service.dart';
 import 'package:flauncher/providers/watch_next_service.dart';
 import 'package:flauncher/widgets/app_card_keys.dart';
+import 'package:flauncher/widgets/home/glide_text.dart';
 import 'package:flauncher/widgets/home/top_info.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,8 +37,9 @@ class SlotTrack extends SlotEntry {
 
   const SlotTrack(this.track, {required this.playing, this.progress});
 
+  // Not keyed on [playing]: pausing changes the caption in place instead of crossfading the card.
   @override
-  String get key => '${playing ? 'playing' : 'last'}:${track.key}';
+  String get key => 'track:${track.key}';
 }
 
 /// One thing to continue watching.
@@ -50,8 +52,9 @@ class SlotWatch extends SlotEntry {
   String get key => 'watch:${program.id}:${program.posterArtUri}';
 }
 
-/// How many cards the slot stacks.
+/// How many cards the slot stacks, and the space between them.
 const int slotPlaces = 2;
+const double slotGap = 14;
 
 // TvContract.WatchNextPrograms.WATCH_NEXT_TYPE_WATCHLIST: saved for later, not something left part-way.
 const _watchlist = 3;
@@ -91,7 +94,8 @@ List<SlotEntry> currentSlot(NowPlayingService music, WatchNextService watch, {Se
   final lastAt = music.lastSongAt;
   final recent = <(DateTime, SlotEntry)>[
     for (final program in watched) (watchedAt(program)!, SlotWatch(program)),
-    if (playing == null && last != null && lastAt != null) (lastAt, SlotTrack(last, playing: false)),
+    if (playing == null && last != null && lastAt != null)
+      (lastAt, SlotTrack(last, playing: false, progress: music.pausedProgress)),
   ]..sort((a, b) => b.$1.compareTo(a.$1));
   return [
     if (playing != null) SlotTrack(playing, playing: true, progress: music.progress),
@@ -99,27 +103,24 @@ List<SlotEntry> currentSlot(NowPlayingService music, WatchNextService watch, {Se
   ].take(slotPlaces).toList();
 }
 
-/// The space right of the time and weather: up to [slotPlaces] cards stacked. Empty when there
-/// is nothing to show; it can be focused (Up from the top row), Up / Down move between the
-/// cards, and OK opens the focused one.
+/// The big spot and the card beside it, under the clock line. It can be focused (Up from the
+/// top row); Left / Right move along a song's player controls and between the cards, OK presses
+/// the control or opens the card, and Down goes back to the apps.
 class HomeSlot extends StatefulWidget {
   static const double _minWidth = WatchCard.posterWidth + 18 + 80;
 
   final List<SlotEntry> entries;
 
-  /// Lay the playing song out large across the width, the rest small at the bottom right.
-  final bool hero;
   final FocusNode? focusNode;
   final ValueChanged<SlotEntry>? onSelect;
+
+  /// A player control pressed on the song in the big spot: `play`, `pause`, `next` or `previous`.
+  final ValueChanged<String>? onControl;
   final VoidCallback? onDown;
   final VoidCallback? onRight;
 
   const HomeSlot(
-      {super.key, required this.entries, this.hero = false, this.focusNode, this.onSelect, this.onDown, this.onRight});
-
-  /// Whether [entries] lead with a song playing right now, the one case that takes the hero layout.
-  static bool leadsWithMusic(List<SlotEntry> entries) =>
-      entries.isNotEmpty && entries.first is SlotTrack && (entries.first as SlotTrack).playing;
+      {super.key, required this.entries, this.focusNode, this.onSelect, this.onControl, this.onDown, this.onRight});
 
   @override
   State<HomeSlot> createState() => _HomeSlotState();
@@ -129,7 +130,17 @@ class _HomeSlotState extends State<HomeSlot> {
   bool _focused = false;
   int _index = 0;
 
+  // Which player control the remote is on, when the song in the big spot has them; it starts
+  // on play / pause each time the card is reached.
+  int _control = 1;
+
   int get _count => widget.entries.length;
+
+  /// A song playing, or paused with its progress still held: the ones the controls can act on.
+  bool get _hasControls {
+    final first = widget.entries.firstOrNull;
+    return _index == 0 && first is SlotTrack && (first.playing || first.progress != null);
+  }
 
   @override
   void didUpdateWidget(HomeSlot old) {
@@ -137,23 +148,46 @@ class _HomeSlotState extends State<HomeSlot> {
     if (_index >= _count) _index = _count == 0 ? 0 : _count - 1;
   }
 
+  void _press() {
+    final first = widget.entries.first as SlotTrack;
+    widget.onControl?.call(switch (PlayerControls.actions[_control]) {
+      'playPause' => first.playing ? 'pause' : 'play',
+      final action => action,
+    });
+  }
+
   KeyEventResult _onKey(FocusNode _, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
     if (AppCardKeys.validationKeys.contains(key)) {
-      if (_index < _count) widget.onSelect?.call(widget.entries[_index]);
-    } else if (key == LogicalKeyboardKey.arrowDown) {
-      if (_index < _count - 1) {
+      if (_hasControls) {
+        _press();
+      } else if (_index < _count) {
+        widget.onSelect?.call(widget.entries[_index]);
+      }
+    } else if (key == LogicalKeyboardKey.arrowRight) {
+      // Along the controls, then on to the card beside, then out to the menu.
+      if (_hasControls && _control < PlayerControls.actions.length - 1) {
+        setState(() => _control++);
+      } else if (_index < _count - 1) {
         setState(() => _index++);
       } else {
-        widget.onDown?.call();
+        widget.onRight?.call();
       }
-    } else if (key == LogicalKeyboardKey.arrowUp) {
-      // Up leads nowhere from the top card.
-      if (_index > 0) setState(() => _index--);
-    } else if (key == LogicalKeyboardKey.arrowRight) {
-      widget.onRight?.call();
-    } else if (key != LogicalKeyboardKey.arrowLeft) {
+    } else if (key == LogicalKeyboardKey.arrowLeft) {
+      if (_hasControls && _control > 0) {
+        setState(() => _control--);
+      } else if (_index > 0) {
+        setState(() {
+          _index--;
+          // Back from the card beside lands on the nearest control.
+          _control = PlayerControls.actions.length - 1;
+        });
+      }
+    } else if (key == LogicalKeyboardKey.arrowDown) {
+      widget.onDown?.call();
+    } else if (key != LogicalKeyboardKey.arrowUp) {
+      // Up leads nowhere from the top of the screen.
       return KeyEventResult.ignored;
     }
     return KeyEventResult.handled;
@@ -162,71 +196,45 @@ class _HomeSlotState extends State<HomeSlot> {
   // Beside the hero there is less room, so the side card's words stay narrow.
   Widget _sideCard(SlotEntry entry, bool focused) => switch (entry) {
         SlotTrack(:final track, :final playing, :final progress) => TrackCard(
-            key: ValueKey(entry.key), track: track, playing: playing, progress: progress, focused: focused, textWidth: 206),
-        SlotWatch(:final program) => WatchCard(key: ValueKey(entry.key), program: program, focused: focused, textWidth: 206),
-      };
-
-  Widget _card(SlotEntry entry, bool focused) => switch (entry) {
-        SlotTrack(:final track, :final playing, :final progress) =>
-          TrackCard(key: ValueKey(entry.key), track: track, playing: playing, progress: progress, focused: focused),
-        SlotWatch(:final program) => WatchCard(key: ValueKey(entry.key), program: program, focused: focused),
+            key: ValueKey(entry.key), track: track, playing: playing, progress: progress, focused: focused, textWidth: 180),
+        SlotWatch(:final program) => WatchCard(key: ValueKey(entry.key), program: program, focused: focused, textWidth: 180),
       };
 
   Widget _place(int i, Widget Function(SlotEntry entry, bool focused) card) => AnimatedSwitcher(
         duration: const Duration(milliseconds: 600),
         switchInCurve: Curves.easeOut,
         switchOutCurve: Curves.easeIn,
-        layoutBuilder: (current, previous) => Stack(
-          alignment: Alignment.centerLeft,
-          children: [...previous, if (current != null) current],
-        ),
+        layoutBuilder: sizedToCurrent,
         child: i < widget.entries.length
             ? card(widget.entries[i], _focused && i == _index)
             : SizedBox.shrink(key: ValueKey('empty$i')),
       );
 
-  Widget _stack() => Column(
+  /// The most current thing large, then the next, small, after a hairline; all flowing left.
+  Widget _heroLayout() => Row(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Each place crossfades on its own, so music starting only changes what moves.
-          for (var i = 0; i < slotPlaces; i++) ...[
-            if (i > 0 && i < widget.entries.length) const SizedBox(height: 20),
-            _place(i, _card),
-          ],
+          Flexible(child: _place(0, _heroCard)),
+          for (var i = 1; i < slotPlaces; i++)
+            if (i < widget.entries.length) ...[
+              const SizedBox(width: 28),
+              const SlotDivider(height: HeroCard.height * 0.75),
+              const SizedBox(width: 28),
+              _place(i, _sideCard),
+            ],
         ],
       );
 
-  /// The playing song large, then whatever else there is, small, after a hairline; all flowing left.
-  Widget _heroLayout() {
-    final top = widget.entries.first as SlotTrack;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Flexible(
-          child: NowPlayingHero(
-            key: ValueKey(top.key),
-            track: top.track,
-            progress: top.progress,
-            focused: _focused && _index == 0,
-          ),
-        ),
-        for (var i = 1; i < slotPlaces; i++)
-          if (i < widget.entries.length) ...[
-            const SizedBox(width: 28),
-            const SlotDivider(height: NowPlayingHero.artSize * 0.75),
-            const SizedBox(width: 28),
-            _place(i, _sideCard),
-          ],
-      ],
-    );
-  }
+  Widget _heroCard(SlotEntry entry, bool focused) => switch (entry) {
+        SlotTrack(:final track, :final playing, :final progress) => HeroCard.track(
+            key: ValueKey(entry.key), track: track, playing: playing, progress: progress, focused: focused, control: _control),
+        SlotWatch(:final program) => HeroCard.watch(key: ValueKey(entry.key), program: program, focused: focused),
+      };
 
   @override
   Widget build(BuildContext context) {
     final entries = widget.entries;
-    final hero = widget.hero && HomeSlot.leadsWithMusic(entries);
     return LayoutBuilder(
       // Too narrow for the art and a few words: show nothing (and take no focus) rather than a squashed card.
       builder: (context, constraints) => constraints.maxWidth < HomeSlot._minWidth
@@ -237,10 +245,13 @@ class _HomeSlotState extends State<HomeSlot> {
               // Coming back into the slot always starts on the top card.
               onFocusChange: (focused) => setState(() {
                 _focused = focused;
-                if (!focused) _index = 0;
+                if (!focused) {
+                  _index = 0;
+                  _control = 1;
+                }
               }),
               onKeyEvent: _onKey,
-              child: hero ? _heroLayout() : _stack(),
+              child: _heroLayout(),
             ),
     );
   }
@@ -256,76 +267,153 @@ class SlotDivider extends StatelessWidget {
   Widget build(BuildContext context) => Container(width: 1, height: height, color: Colors.white24);
 }
 
-/// Now playing as the main attraction: large art, title, artist and progress.
-class NowPlayingHero extends StatelessWidget {
-  static const double artSize = 120;
+/// The main attraction of the top half: large art (square for music, 16:9 for a show), a
+/// caption, the title, a second line, and progress.
+class HeroCard extends StatelessWidget {
+  static const double height = 120;
+  static const double textWidth = 260;
 
-  final Track track;
-  final TrackProgress? progress;
+  final Widget image;
+  final double imageWidth;
+  final String caption;
+  final String title;
+  final String subtitle;
+  final Widget? footer;
   final bool focused;
 
-  const NowPlayingHero({super.key, required this.track, this.progress, this.focused = false});
+  /// Whether the art shows the focus ring: not when a player control has the focus instead.
+  final bool imageFocused;
+
+  /// Changes when the art itself changes, so new art fades in rather than popping.
+  final Object? imageKey;
+
+  const HeroCard({
+    super.key,
+    this.imageFocused = true,
+    this.imageKey,
+    required this.image,
+    required this.imageWidth,
+    required this.caption,
+    required this.title,
+    required this.subtitle,
+    this.footer,
+    this.focused = false,
+  });
+
+  factory HeroCard.track(
+          {Key? key,
+          required Track track,
+          required bool playing,
+          TrackProgress? progress,
+          bool focused = false,
+          int? control}) =>
+      HeroCard(
+        key: key,
+        imageWidth: height,
+        // With controls on screen the remote is on one of them, so only that one lights up.
+        imageFocused: control == null || !(playing || progress != null),
+        imageKey: track.art == null ? 'none' : identityHashCode(track.art),
+        image: track.art == null
+            ? const _Glyph(Icons.music_note_rounded)
+            : Image.memory(
+                track.art!,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                filterQuality: FilterQuality.medium,
+                errorBuilder: (_, __, ___) => const _Glyph(Icons.music_note_rounded),
+              ),
+        // Paused (progress still known) keeps the bar where it stopped; only the caption changes.
+        caption: playing ? 'NOW PLAYING' : (progress != null ? 'PAUSED' : 'LAST PLAYED'),
+        title: track.title,
+        subtitle: track.artist,
+        footer: progress != null
+            ? TrackProgressBar(
+                progress,
+                width: textWidth,
+                center: focused && control != null ? PlayerControls(playing: playing, selected: control) : null,
+              )
+            : null,
+        focused: focused,
+      );
+
+  factory HeroCard.watch({Key? key, required WatchNextProgram program, bool focused = false}) {
+    final progress = program.safeProgress;
+    final left = program.duration > 0 && program.playbackPosition > 0
+        ? Duration(milliseconds: program.duration - program.playbackPosition)
+        : null;
+    return HeroCard(
+      key: key,
+      imageWidth: height * 16 / 9,
+      image: _Poster(program),
+      caption: 'CONTINUE WATCHING',
+      title: program.title,
+      subtitle: program.description,
+      footer: progress > 0 ? WatchProgressBar(progress: progress, left: left) : null,
+      focused: focused,
+    );
+  }
 
   @override
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           AnimatedScale(
-            scale: focused ? 1.04 : 1,
+            scale: focused && imageFocused ? 1.04 : 1,
             duration: const Duration(milliseconds: 160),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
-              width: artSize,
-              height: artSize,
+              width: imageWidth,
+              height: height,
               decoration: BoxDecoration(
                 color: const Color(0xFF2A2A2E),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: focused ? Colors.white : Colors.transparent, width: 2),
+                border: Border.all(color: focused && imageFocused ? Colors.white : Colors.transparent, width: 2),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(focused ? 0.55 : 0.45), blurRadius: focused ? 30 : 24, offset: const Offset(0, 8)),
+                  BoxShadow(
+                      color: Colors.black.withOpacity(focused && imageFocused ? 0.55 : 0.45),
+                      blurRadius: focused && imageFocused ? 30 : 24,
+                      offset: const Offset(0, 8)),
                 ],
               ),
               clipBehavior: Clip.antiAlias,
-              child: track.art == null
-                  ? const _Glyph(Icons.music_note_rounded)
-                  : Image.memory(
-                      track.art!,
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
-                      filterQuality: FilterQuality.medium,
-                      errorBuilder: (_, __, ___) => const _Glyph(Icons.music_note_rounded),
-                    ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 350),
+                // The frame's size is fixed, so old and new art simply fill it.
+                layoutBuilder: (current, previous) =>
+                    Stack(fit: StackFit.expand, children: [...previous, if (current != null) current]),
+                child: KeyedSubtree(key: ValueKey(imageKey), child: SizedBox.expand(child: image)),
+              ),
             ),
           ),
           const SizedBox(width: 28),
+          // A set width, whatever the title or whether a bar shows, so nothing beside it shifts;
+          // it gives way only when a wide poster leaves less room.
           Flexible(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
-              child: Column(
+            child: SizedBox(
+            width: textWidth,
+            child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'NOW PLAYING',
-                    style: TextStyle(color: Colors.white60, fontSize: 13, letterSpacing: 2, fontWeight: FontWeight.w600, shadows: homeTextShadows),
+                  Text(
+                    caption,
+                    style: const TextStyle(color: Colors.white60, fontSize: 13, letterSpacing: 2, fontWeight: FontWeight.w600, shadows: homeTextShadows),
                   ),
                   const SizedBox(height: 10),
-                  Text(
-                    track.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  GlideText(
+                    title,
+                    gliding: focused,
                     style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w500, height: 1.15, shadows: homeTextShadows),
                   ),
-                  if (track.artist.isNotEmpty)
-                    Text(
-                      track.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  if (subtitle.isNotEmpty)
+                    GlideText(
+                      subtitle,
+                      gliding: focused,
                       style: const TextStyle(color: Colors.white70, fontSize: 20, shadows: homeTextShadows),
                     ),
-                  if (progress != null) ...[
+                  if (footer != null) ...[
                     const SizedBox(height: 6),
-                    TrackProgressBar(progress!, width: 300),
+                    footer!,
                   ],
                 ],
               ),
@@ -335,9 +423,78 @@ class NowPlayingHero extends StatelessWidget {
       );
 }
 
-/// Album art beside the song and artist; dimmed once it is no longer playing.
+/// Previous, play or pause, next: shown under a song's bar while its card is focused.
+class PlayerControls extends StatelessWidget {
+  static const actions = ['previous', 'playPause', 'next'];
+
+  final bool playing;
+
+  /// Which of [actions] the remote is on.
+  final int selected;
+
+  const PlayerControls({super.key, required this.playing, required this.selected});
+
+  @override
+  Widget build(BuildContext context) {
+    final icons = [Icons.skip_previous_rounded, playing ? Icons.pause_rounded : Icons.play_arrow_rounded, Icons.skip_next_rounded];
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < icons.length; i++)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(color: i == selected ? Colors.white : Colors.transparent, shape: BoxShape.circle),
+            child: Icon(icons[i], size: 20, color: i == selected ? Colors.black87 : Colors.white70),
+          ),
+      ],
+    );
+  }
+}
+
+/// How far into a show: the same thin bar as a song's, with the time left.
+class WatchProgressBar extends StatelessWidget {
+  final double progress;
+  final Duration? left;
+
+  const WatchProgressBar({super.key, required this.progress, this.left});
+
+  static String _left(Duration d) {
+    final m = (d.inSeconds / 60).ceil();
+    return m >= 60 ? '${m ~/ 60} h ${m % 60} min left' : '$m min left';
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: HeroCard.textWidth,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 3,
+                backgroundColor: Colors.white24,
+                valueColor: const AlwaysStoppedAnimation(Colors.white),
+              ),
+            ),
+            if (left != null) ...[
+              const SizedBox(height: 5),
+              Text(_left(left!),
+                  style: const TextStyle(color: Colors.white60, fontSize: 13, shadows: homeTextShadows)),
+            ],
+          ],
+        ),
+      );
+}
+
+/// Album art beside the song and artist.
 class TrackCard extends StatelessWidget {
-  static const double artSize = 88;
+  static const double artSize = 76;
 
   final Track track;
   final bool playing;
@@ -386,7 +543,6 @@ class TrackCard extends StatelessWidget {
         title: track.title,
         subtitle: track.artist,
         footer: playing && progress != null ? TrackProgressBar(progress!) : null,
-        dim: !playing,
         focused: focused,
         textWidth: textWidth,
       );
@@ -398,9 +554,13 @@ class TrackProgressBar extends StatefulWidget {
 
   final TrackProgress progress;
   final double width;
+
+  /// Sits between the elapsed and total times: the player controls, while focused.
+  final Widget? center;
   final DateTime Function() now;
 
-  const TrackProgressBar(this.progress, {super.key, this.width = TrackProgressBar.defaultWidth, this.now = DateTime.now});
+  const TrackProgressBar(this.progress,
+      {super.key, this.width = TrackProgressBar.defaultWidth, this.center, this.now = DateTime.now});
 
   @override
   State<TrackProgressBar> createState() => _TrackProgressBarState();
@@ -451,9 +611,17 @@ class _TrackProgressBarState extends State<TrackProgressBar> {
             ),
           ),
           const SizedBox(height: 5),
-          Row(
+          // As tall as the controls whether or not they show, so focusing the card moves nothing.
+          SizedBox(
+            height: 26,
+            child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [Text(_clock(at), style: style), Text(_clock(p.duration), style: style)],
+            children: [
+              Text(_clock(at), style: style),
+              if (widget.center != null) widget.center!,
+              Text(_clock(p.duration), style: style),
+            ],
+          ),
           ),
         ],
       ),
@@ -499,7 +667,6 @@ class WatchCard extends StatelessWidget {
       caption: 'CONTINUE WATCHING',
       title: program.title,
       subtitle: program.description,
-      dim: false,
       focused: focused,
       textWidth: textWidth,
     );
@@ -512,7 +679,6 @@ class _SlotCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget? footer;
-  final bool dim;
   final bool focused;
   final double textWidth;
 
@@ -523,15 +689,11 @@ class _SlotCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.footer,
-    required this.dim,
     required this.focused,
   });
 
   @override
-  Widget build(BuildContext context) => AnimatedOpacity(
-        opacity: dim && !focused ? 0.6 : 1,
-        duration: const Duration(milliseconds: 400),
-        child: Row(
+  Widget build(BuildContext context) => Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             AnimatedScale(
@@ -564,19 +726,17 @@ class _SlotCard extends StatelessWidget {
                       style: const TextStyle(
                           color: Colors.white60, fontSize: 12, letterSpacing: 1.4, fontWeight: FontWeight.w600, shadows: homeTextShadows),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
+                    const SizedBox(height: 4),
+                    GlideText(
                       title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w500, shadows: homeTextShadows),
+                      gliding: focused,
+                      style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w500, shadows: homeTextShadows),
                     ),
                     if (subtitle.isNotEmpty)
-                      Text(
+                      GlideText(
                         subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white70, fontSize: 19, shadows: homeTextShadows),
+                        gliding: focused,
+                        style: const TextStyle(color: Colors.white70, fontSize: 17, shadows: homeTextShadows),
                       ),
                     if (footer != null) footer!,
                   ],
@@ -584,7 +744,6 @@ class _SlotCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
       );
 }
 
@@ -651,3 +810,13 @@ class _PosterState extends State<_Poster> {
     );
   }
 }
+
+/// An AnimatedSwitcher layout that takes only the incoming child's size: the outgoing one fades
+/// out on top without holding the old size open, so nothing around it shifts when the fade ends.
+Widget sizedToCurrent(Widget? current, List<Widget> previous) => Stack(
+      clipBehavior: Clip.none,
+      children: [
+        for (final child in previous) Positioned(left: 0, top: 0, child: child),
+        if (current != null) current,
+      ],
+    );

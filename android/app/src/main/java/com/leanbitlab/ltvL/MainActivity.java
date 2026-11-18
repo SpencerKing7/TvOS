@@ -84,6 +84,7 @@ public class MainActivity extends FlutterActivity {
     private final String WEATHER_EVENT_CHANNEL = "me.efesser.flauncher/event_weather";
     private final String WATCH_NEXT_EVENT_CHANNEL = "me.efesser.flauncher/event_watch_next";
     private final String NOW_PLAYING_EVENT_CHANNEL = "me.efesser.flauncher/event_now_playing";
+    private NowPlayingStreamHandler nowPlaying;
     private MethodChannel.Result pendingPermissionResult;
     private static final ExecutorService sIoExecutor = Executors.newFixedThreadPool(4);
 
@@ -92,6 +93,7 @@ public class MainActivity extends FlutterActivity {
         super.configureFlutterEngine(flutterEngine);
 
         BinaryMessenger messenger = flutterEngine.getDartExecutor().getBinaryMessenger();
+        nowPlaying = new NowPlayingStreamHandler(getApplicationContext());
 
         new MethodChannel(messenger, METHOD_CHANNEL).setMethodCallHandler((call, result) -> {
             switch (call.method) {
@@ -209,6 +211,7 @@ public class MainActivity extends FlutterActivity {
                         result.error("INVALID_ARGUMENT", "Missing id", null);
                     }
                 }
+                case "nowPlayingControl" -> result.success(nowPlaying.control(call.argument("action")));
                 case "launchWatchNextProgram" -> {
                     String intentUri = call.argument("intentUri");
                     result.success(launchWatchNextProgram(intentUri));
@@ -231,8 +234,7 @@ public class MainActivity extends FlutterActivity {
         new EventChannel(messenger, NETWORK_EVENT_CHANNEL).setStreamHandler(
                 new NetworkEventStreamHandler(this));
 
-        new EventChannel(messenger, NOW_PLAYING_EVENT_CHANNEL).setStreamHandler(
-                new NowPlayingStreamHandler(getApplicationContext()));
+        new EventChannel(messenger, NOW_PLAYING_EVENT_CHANNEL).setStreamHandler(nowPlaying);
 
         new EventChannel(messenger, NOTIFICATIONS_EVENT_CHANNEL).setStreamHandler(
                 new EventChannel.StreamHandler() {

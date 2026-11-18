@@ -150,12 +150,23 @@ void main() {
       expect(music.progress!.at(at.add(const Duration(hours: 1))), const Duration(seconds: 225));
     });
 
-    test('goes away on pause', () async {
+    test('holds still where it stopped on pause', () async {
       final music = await service();
       events.add(timed());
-      events.add(timed(playing: false));
       await settle();
+      clock = at.add(const Duration(seconds: 10));
+      events.add({..._song('One', playing: false)});
+      await settle();
+
       expect(music.progress, isNull);
+      final paused = music.pausedProgress!;
+      expect(paused.at(clock), const Duration(seconds: 93));
+      expect(paused.at(clock.add(const Duration(minutes: 5))), const Duration(seconds: 93));
+
+      // After 15 minutes it is just the last song: no progress.
+      clock = clock.add(NowPlayingService.pausedFor);
+      expect(music.pausedProgress, isNull);
+      expect(music.lastSong?.title, 'One');
     });
 
     test('is null when the app reports no length', () async {

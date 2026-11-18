@@ -64,6 +64,10 @@ class TrackProgress {
     return Duration(milliseconds: ms);
   }
 
+  /// Held still at where it is at [now]: what a paused song shows.
+  TrackProgress frozenAt(DateTime now) =>
+      TrackProgress(duration: duration, position: at(now), positionAt: now, speed: 0);
+
   /// Null when the app reports no length (a radio stream, say) or no position.
   static TrackProgress? fromEvent(Map<dynamic, dynamic> event) {
     final duration = event['durationMs'];
@@ -102,16 +106,19 @@ class NowPlayingService extends ChangeNotifier {
 
   Track? _playing;
   TrackProgress? _progress;
+  Timer? _staleTimer;
   Track? _lastSong;
   DateTime? _lastSongAt;
 
-  NowPlayingService(FLauncherChannel channel, this._prefs,
+  final FLauncherChannel _channel;
+
+  NowPlayingService(this._channel, this._prefs,
       {Future<Directory> Function()? storage, DateTime Function()? now})
       : _storage = storage ?? getApplicationSupportDirectory,
         _now = now ?? DateTime.now {
     _restore();
     try {
-      _subscription = channel.nowPlayingEvents().listen(
+      _subscription = _channel.nowPlayingEvents().listen(
         (event) => onEvent(event is Map ? event : const {}),
         onError: (Object e) => log('Now playing stream failed', name: 'NowPlayingService', error: e),
       );
@@ -125,6 +132,26 @@ class NowPlayingService extends ChangeNotifier {
 
   /// How far into [playing], when the app reports it; null when nothing plays.
   TrackProgress? get progress => _playing == null ? null : _progress;
+
+  /// How long a paused song keeps its progress bar before it reads as just "last played".
+  static const pausedFor = Duration(minutes: 15);
+
+  /// Where [lastSong] stopped, held still, for [pausedFor] after the pause; null after that
+  /// (or after a restart).
+  TrackProgress? get pausedProgress {
+    if (_playing != null || _progress == null || _lastSongAt == null) return null;
+    return _now().difference(_lastSongAt!) < pausedFor ? _progress : null;
+  }
+
+  /// Plays, pauses or skips the song on screen: `play`, `pause`, `next` or `previous`.
+  Future<bool> control(String action) async {
+    try {
+      return await _channel.nowPlayingControl(action);
+    } catch (e) {
+      log('Now playing control failed', name: 'NowPlayingService', error: e);
+      return false;
+    }
+  }
 
   /// The most recent track that played, including the one playing now.
   Track? get lastSong => _lastSong;
@@ -143,6 +170,7 @@ class NowPlayingService extends ChangeNotifier {
       // Keep the art already held for this song: some apps send it a moment after the title,
       // and the same bytes keep the image from being decoded again on every event.
       final withArt = !changed && _lastSong?.art != null ? track.withArt(_lastSong!.art) : track;
+      _staleTimer?.cancel();
       _playing = withArt;
       _progress = TrackProgress.fromEvent(event);
       _lastSong = withArt;
@@ -153,11 +181,15 @@ class NowPlayingService extends ChangeNotifier {
     }
 
     if (_playing != null) {
-      // Just paused or stopped: it becomes the last song, as of now.
+      // Just paused or stopped: it becomes the last song, as of now, its progress held where
+      // it stopped (the app's own paused position when it sends one for the same song).
+      final reported = track != null && track.key == _playing!.key ? TrackProgress.fromEvent(event) : null;
+      _progress = (reported ?? _progress)?.frozenAt(_now());
       _playing = null;
-      _progress = null;
       _lastSongAt = _now();
       if (_lastSong != null) _saveTime();
+      _staleTimer?.cancel();
+      _staleTimer = Timer(pausedFor, notifyListeners);
       notifyListeners();
     }
   }
@@ -220,6 +252,7 @@ class NowPlayingService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _staleTimer?.cancel();
     _subscription?.cancel();
     super.dispose();
   }
