@@ -20,23 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-/// Picks what the shared slot shows: whatever is [live] right now wins; otherwise the most
-/// recent of [recent] (each with when it last happened); otherwise nothing.
-T? pickSlot<T extends Object>({T? live, Iterable<(DateTime?, T?)> recent = const []}) {
-  if (live != null) return live;
-  T? best;
-  DateTime? bestAt;
-  for (final (at, item) in recent) {
-    if (item == null || at == null) continue;
-    if (bestAt == null || at.isAfter(bestAt)) {
-      best = item;
-      bestAt = at;
-    }
-  }
-  return best;
-}
-
-/// One thing the slot can show.
+/// One card the slot can show.
 sealed class SlotEntry {
   const SlotEntry();
 
@@ -55,23 +39,24 @@ class SlotTrack extends SlotEntry {
   String get key => '${playing ? 'playing' : 'last'}:${track.key}';
 }
 
-/// Up to [maxWatches] things to continue watching, newest first, stacked.
+/// One thing to continue watching.
 class SlotWatch extends SlotEntry {
-  final List<WatchNextProgram> programs;
+  final WatchNextProgram program;
 
-  const SlotWatch(this.programs);
+  const SlotWatch(this.program);
 
   @override
-  String get key => 'watch:${programs.map((p) => '${p.id}:${p.posterArtUri}').join(',')}';
+  String get key => 'watch:${program.id}:${program.posterArtUri}';
 }
 
-const int maxWatches = 2;
+/// How many cards the slot stacks.
+const int slotPlaces = 2;
 
 // TvContract.WatchNextPrograms.WATCH_NEXT_TYPE_WATCHLIST: saved for later, not something left part-way.
 const _watchlist = 3;
 
 /// The Watch Next items worth continuing, newest first, at most [count]; only from [apps] when given.
-List<WatchNextProgram> latestWatches(List<WatchNextProgram> programs, {Set<String>? apps, int count = maxWatches}) =>
+List<WatchNextProgram> latestWatches(List<WatchNextProgram> programs, {Set<String>? apps, int count = slotPlaces}) =>
     (programs
             .where((p) =>
                 p.title.isNotEmpty &&
@@ -95,34 +80,33 @@ DateTime? watchedAt(WatchNextProgram program) {
   return DateTime.fromMillisecondsSinceEpoch(at);
 }
 
-/// What the slot shows now: Now playing while music plays, otherwise whichever happened last,
-/// the last song or the last things watched (only from [apps], the pinned ones, when given).
-SlotEntry? currentSlot(NowPlayingService music, WatchNextService watch, {Set<String>? apps}) {
+/// What the slot stacks, top first: Now playing while music plays, then the latest shows to
+/// continue (only from [apps], the pinned ones, when given), up to [slotPlaces] cards. With
+/// nothing playing and nothing to continue, the last song.
+List<SlotEntry> currentSlot(NowPlayingService music, WatchNextService watch, {Set<String>? apps}) {
   final playing = music.playing;
-  final last = music.lastSong;
   final watched = watch.hasPermission ? latestWatches(watch.programs, apps: apps) : const <WatchNextProgram>[];
-  return pickSlot<SlotEntry>(
-    live: playing == null ? null : SlotTrack(playing, playing: true, progress: music.progress),
-    recent: [
-      (music.lastSongAt, last == null ? null : SlotTrack(last, playing: false)),
-      (watched.isEmpty ? null : watchedAt(watched.first), watched.isEmpty ? null : SlotWatch(watched)),
-    ],
-  );
+  final last = music.lastSong;
+  return [
+    if (playing != null) SlotTrack(playing, playing: true, progress: music.progress),
+    for (final program in watched) SlotWatch(program),
+    if (playing == null && watched.isEmpty && last != null) SlotTrack(last, playing: false),
+  ].take(slotPlaces).toList();
 }
 
-/// The one space right of the time and weather. Empty when there is nothing to show; it can
-/// be focused (Up from the top row), Up / Down move between stacked cards, and OK opens the
-/// focused one (its index goes to [onSelect]).
+/// The space right of the time and weather: up to [slotPlaces] cards stacked. Empty when there
+/// is nothing to show; it can be focused (Up from the top row), Up / Down move between the
+/// cards, and OK opens the focused one.
 class HomeSlot extends StatefulWidget {
   static const double _minWidth = TrackCard.artSize + 18 + 80;
 
-  final SlotEntry? entry;
+  final List<SlotEntry> entries;
   final FocusNode? focusNode;
-  final ValueChanged<int>? onSelect;
+  final ValueChanged<SlotEntry>? onSelect;
   final VoidCallback? onDown;
   final VoidCallback? onRight;
 
-  const HomeSlot({super.key, required this.entry, this.focusNode, this.onSelect, this.onDown, this.onRight});
+  const HomeSlot({super.key, required this.entries, this.focusNode, this.onSelect, this.onDown, this.onRight});
 
   @override
   State<HomeSlot> createState() => _HomeSlotState();
@@ -132,7 +116,7 @@ class _HomeSlotState extends State<HomeSlot> {
   bool _focused = false;
   int _index = 0;
 
-  int get _count => switch (widget.entry) { SlotWatch(:final programs) => programs.length, null => 0, _ => 1 };
+  int get _count => widget.entries.length;
 
   @override
   void didUpdateWidget(HomeSlot old) {
@@ -144,7 +128,7 @@ class _HomeSlotState extends State<HomeSlot> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
     if (AppCardKeys.validationKeys.contains(key)) {
-      widget.onSelect?.call(_index);
+      if (_index < _count) widget.onSelect?.call(widget.entries[_index]);
     } else if (key == LogicalKeyboardKey.arrowDown) {
       if (_index < _count - 1) {
         setState(() => _index++);
@@ -162,48 +146,49 @@ class _HomeSlotState extends State<HomeSlot> {
     return KeyEventResult.handled;
   }
 
+  Widget _card(SlotEntry entry, bool focused) => switch (entry) {
+        SlotTrack(:final track, :final playing, :final progress) =>
+          TrackCard(key: ValueKey(entry.key), track: track, playing: playing, progress: progress, focused: focused),
+        SlotWatch(:final program) => WatchCard(key: ValueKey(entry.key), program: program, focused: focused),
+      };
+
   @override
   Widget build(BuildContext context) {
-    final entry = widget.entry;
-    final Widget card = switch (entry) {
-      null => const SizedBox.shrink(key: ValueKey('empty')),
-      SlotTrack(:final track, :final playing, :final progress) =>
-        TrackCard(key: ValueKey(entry.key), track: track, playing: playing, progress: progress, focused: _focused),
-      SlotWatch(:final programs) => Column(
-          key: ValueKey(entry.key),
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (var i = 0; i < programs.length; i++) ...[
-              if (i > 0) const SizedBox(height: 14),
-              WatchCard(program: programs[i], focused: _focused && i == _index),
-            ],
-          ],
-        ),
-    };
-
+    final entries = widget.entries;
     return LayoutBuilder(
       // Too narrow for the art and a few words: show nothing (and take no focus) rather than a squashed card.
       builder: (context, constraints) => constraints.maxWidth < HomeSlot._minWidth
           ? const SizedBox.shrink()
           : Focus(
               focusNode: widget.focusNode,
-              canRequestFocus: entry != null,
+              canRequestFocus: entries.isNotEmpty,
               // Coming back into the slot always starts on the top card.
               onFocusChange: (focused) => setState(() {
                 _focused = focused;
                 if (!focused) _index = 0;
               }),
               onKeyEvent: _onKey,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 600),
-                switchInCurve: Curves.easeOut,
-                switchOutCurve: Curves.easeIn,
-                layoutBuilder: (current, previous) => Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [...previous, if (current != null) current],
-                ),
-                child: card,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Each place crossfades on its own, so music starting only changes what moves.
+                  for (var i = 0; i < slotPlaces; i++) ...[
+                    if (i > 0 && i < entries.length) const SizedBox(height: 14),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 600),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      layoutBuilder: (current, previous) => Stack(
+                        alignment: Alignment.centerLeft,
+                        children: [...previous, if (current != null) current],
+                      ),
+                      child: i < entries.length
+                          ? _card(entries[i], _focused && i == _index)
+                          : SizedBox.shrink(key: ValueKey('empty$i')),
+                    ),
+                  ],
+                ],
               ),
             ),
     );

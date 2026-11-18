@@ -30,24 +30,6 @@ WatchNextProgram program(
     );
 
 void main() {
-  group('pickSlot', () {
-    final earlier = DateTime(2026, 11, 17, 20);
-    final later = DateTime(2026, 11, 17, 21);
-
-    test('whatever is live wins over anything recent', () {
-      expect(pickSlot(live: 'playing', recent: [(later, 'watched')]), 'playing');
-    });
-
-    test('otherwise the most recent wins', () {
-      expect(pickSlot<String>(recent: [(earlier, 'song'), (later, 'watched')]), 'watched');
-      expect(pickSlot<String>(recent: [(later, 'song'), (earlier, 'watched')]), 'song');
-    });
-
-    test('nothing to show is null', () {
-      expect(pickSlot<String>(recent: [(null, 'no time'), (later, null)]), isNull);
-    });
-  });
-
   group('latestWatch', () {
     final at = DateTime(2026, 11, 17, 21).millisecondsSinceEpoch;
 
@@ -104,7 +86,7 @@ void main() {
           ],
           child: MaterialApp(
             home: Scaffold(
-              body: Builder(builder: (c) => HomeSlot(entry: currentSlot(c.watch<NowPlayingService>(), c.watch<WatchNextService>()))),
+              body: Builder(builder: (c) => HomeSlot(entries: currentSlot(c.watch<NowPlayingService>(), c.watch<WatchNextService>()))),
             ),
           ),
         ));
@@ -136,21 +118,29 @@ void main() {
       expect(find.text('Song'), findsOneWidget);
     });
 
-    testWidgets('shows continue watching when it is more recent than the last song', (tester) async {
-      when(watch.programs).thenReturn([program(at: clock.add(const Duration(hours: 1)).millisecondsSinceEpoch)]);
+    testWidgets('music on top while it plays, the latest show under it', (tester) async {
+      when(watch.programs).thenReturn([
+        program(id: 1, title: 'Newer', at: clock.millisecondsSinceEpoch),
+        program(id: 2, title: 'Older', at: clock.subtract(const Duration(hours: 1)).millisecondsSinceEpoch),
+      ]);
       await pump(tester);
+      expect(find.text('Newer'), findsOneWidget);
+      expect(find.text('Older'), findsOneWidget);
+
       await send(tester, {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'playing': true});
-      // Music playing right now beats anything watched, however recent.
       expect(find.text('NOW PLAYING'), findsOneWidget);
+      expect(find.text('Newer'), findsOneWidget);
+      expect(find.text('Older'), findsNothing);
+      // Music is the top card.
+      expect(tester.getTopLeft(find.text('Song')).dy, lessThan(tester.getTopLeft(find.text('Newer')).dy));
 
       await send(tester, {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'playing': false});
-      expect(find.text('CONTINUE WATCHING'), findsOneWidget);
-      expect(find.text('Show'), findsOneWidget);
-      expect(find.text('S1 E2'), findsOneWidget);
+      expect(find.text('NOW PLAYING'), findsNothing);
+      expect(find.text('LAST PLAYED'), findsNothing);
+      expect(find.text('Older'), findsOneWidget);
     });
 
-    testWidgets('keeps the last song when it is more recent than anything watched', (tester) async {
-      when(watch.programs).thenReturn([program(at: clock.subtract(const Duration(hours: 1)).millisecondsSinceEpoch)]);
+    testWidgets('the last song only when there is nothing to continue', (tester) async {
       await pump(tester);
       await send(tester, {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'playing': true});
       await send(tester, {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'playing': false});
@@ -185,19 +175,16 @@ void main() {
     });
   });
 
-  testWidgets('two stacked shows: Down moves to the second, OK picks it, Down again leaves', (tester) async {
+  testWidgets('two stacked cards: Down moves to the second, OK picks it, Down again leaves', (tester) async {
     final at = DateTime(2026, 11, 17, 21).millisecondsSinceEpoch;
+    final first = SlotWatch(program(id: 1, title: 'First', at: at));
+    final second = SlotWatch(program(id: 2, title: 'Second', at: at));
     final node = FocusNode();
-    final selected = <int>[];
+    final selected = <SlotEntry>[];
     var downs = 0;
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: HomeSlot(
-          entry: SlotWatch([program(id: 1, title: 'First', at: at), program(id: 2, title: 'Second', at: at)]),
-          focusNode: node,
-          onSelect: selected.add,
-          onDown: () => downs++,
-        ),
+        body: HomeSlot(entries: [first, second], focusNode: node, onSelect: selected.add, onDown: () => downs++),
       ),
     ));
     expect(find.byType(WatchCard), findsNWidgets(2));
@@ -206,7 +193,7 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    expect(selected, [1]);
+    expect(selected, [second]);
     expect(downs, 0);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
@@ -214,7 +201,7 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    expect(selected, [1, 0]);
+    expect(selected, [second, first]);
     node.dispose();
   });
 
