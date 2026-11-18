@@ -19,49 +19,52 @@ bool get videoLoopsAvailable => videoClips.isNotEmpty;
 
 const _pexelsFiles = 'https://videos.pexels.com/video-files';
 
-/// A Pexels clip at 1080p and 60 fps (Pexels licence: free to use, no credit required) and the
-/// speed it plays at.
+/// A Pexels clip at 1080p and 60 fps (Pexels licence: free to use, no credit required) and
+/// the speed it plays at.
 class VideoClip {
   final String file;
   final double speed;
 
-  const VideoClip(this.file, [this.speed = _calm]);
+  const VideoClip(this.file, [this.speed = 1.0]);
 
   String get name => file.split('/').last;
 }
 
-// Speeds: slow enough that a clip reads as a still picture until you watch it. Every clip is
-// 60 fps, so 0.4 still leaves 24 new frames a second (about film's rate) and motion glides
-// rather than steps; 24–30 fps sources at this speed stepped visibly on the TV, which is why
-// test/widgets/video_loops_test.dart rejects them. Timelapses move fast, so go slower.
-const _calm = 0.4;
-const _timelapse = 0.35;
+// Clips play at 1×, so a 60 fps file puts a new frame on every refresh of a 60 Hz TV, the
+// way the macOS Aerials do. Slowing them down only holds each frame for 2–3 refreshes
+// (judder) without making the motion any smaller per frame. Calm comes from the footage:
+// open landscapes and slow, steady camera glides.
 
-/// Played in this order, which rotates through themes (clouds, mountains, water, forest,
-/// light) so similar scenes never follow each other, wrap-around included; every clip shows
-/// once before any repeats.
+/// Played in this order, which rotates through themes (mountains, water, desert, clouds,
+/// forest, light) so similar scenes never follow each other, wrap-around included; every
+/// clip shows once before any repeats.
 const videoClips = [
-  VideoClip('20545782/20545782-hd_1920_1080_60fps.mp4'), // water: pines reflected in a still lake
-  VideoClip('29974956/12862717_1920_1080_60fps.mp4'), // forest: sunlit evergreen forest
-  VideoClip('17931939/17931939-hd_1920_1080_60fps.mp4'), // water: wide river below misty hills
-  VideoClip('30820448/13181543_1920_1080_60fps.mp4'), // mountains: fog in a valley at sunrise
-  VideoClip('16723255/16723255-hd_1920_1080_60fps.mp4'), // water: waterfall over a rock slab
-  VideoClip('33627769/14291588_1920_1080_60fps.mp4'), // clouds: sunset clouds over a treeline
-  VideoClip('34820159/14762595_1920_1080_60fps.mp4'), // water: stream through a forest
-  VideoClip('12505206/12505206-hd_1920_1080_60fps.mp4'), // forest: snow among tall trees
-  VideoClip('39600212/16880470_1920_1080_60fps.mp4'), // water: open water at dusk
-  VideoClip('36492189/15473858_1920_1080_60fps.mp4'), // light: sun setting behind trees
-  VideoClip('38067892/16162249_1920_1080_60fps.mp4'), // water: waterfall into a green pool
-  VideoClip('13372590/13372590-hd_1920_1080_60fps.mp4'), // forest: dense leafy woodland
-  VideoClip('40891259/17480986_1920_1080_60fps.mp4'), // mountains: cloud on a snowy volcano
-  VideoClip('30371227/13016538_1920_1080_60fps.mp4'), // forest: pines over a mossy floor
-  VideoClip('35808955/15181768_1920_1080_60fps.mp4', _timelapse), // clouds: sunset timelapse over hills
+  VideoClip('33197843/14148120_1920_1080_60fps.mp4'), // mountains: Fitz Roy over glacial lakes
+  VideoClip('36758608/15578481_1920_1080_60fps.mp4'), // water: channels and islands at sunset
+  VideoClip('28879134/12502452_1920_1080_60fps.mp4'), // desert: Monument Valley buttes at dawn
+  VideoClip('19460532/19460532-hd_1920_1080_60fps.mp4'), // clouds: a sea of cloud over the land
+  VideoClip('29415859/12666746_1920_1080_60fps.mp4'), // mountains: snowfields under a blue sky
+  VideoClip('33330010/14192475_1920_1080_60fps.mp4'), // water: a turquoise fjord between cliffs
+  VideoClip('18757530/18757530-hd_1920_1080_60fps.mp4'), // forest: pine-covered mountainsides
+  VideoClip('31332724/13373828_1920_1080_60fps.mp4'), // light: sun rays over hazy ranges
+  VideoClip('33285456/14178183_1920_1080_60fps.mp4'), // mountains: Fitz Roy in golden light
+  VideoClip('38361089/16290220_1920_1080_60fps.mp4'), // water: islands in a mountain lake
+  VideoClip('30791936/13170365_1920_1080_60fps.mp4'), // desert: white sand dunes
+  VideoClip('14862547/14862547-hd_1920_1080_60fps.mp4'), // clouds: cloud flowing through peaks
+  VideoClip('16461789/16461789-hd_1920_1080_60fps.mp4'), // water: sun setting over a lake
+  VideoClip('30859401/13196587_1920_1080_60fps.mp4'), // mountains: a snow-dusted summit
+  VideoClip('38903112/16542886_1920_1080_60fps.mp4'), // forest: woodland at sunrise
+  VideoClip('36460250/15460732_1920_1080_60fps.mp4'), // desert: red cliffs under a blue sky
+  VideoClip('31985994/13630845_1920_1080_60fps.mp4'), // clouds: the sun above a cloud sea
+  VideoClip('35410029/15003059_1920_1080_60fps.mp4'), // water: a braided river below snowy peaks
+  VideoClip('33285408/14178165_1920_1080_60fps.mp4'), // mountains: Fitz Roy above a frozen lake
+  VideoClip('17374934/17374934-hd_1920_1080_60fps.mp4'), // light: sunset clouds over a lake
 ];
 
 /// True once a clip is on screen, so the background can stop drawing what it covers.
 final ValueNotifier<bool> videoShowing = ValueNotifier(false);
 
-/// Calm clips, each played once at a slowed pace and dissolved into the next, so nothing
+/// Calm clips, each played once and dissolved into the next, so nothing
 /// visibly loops. Paused whenever the launcher isn't on screen. Shows nothing (whatever
 /// is beneath shows) until the first clip is ready.
 class VideoLoops extends StatefulWidget {
