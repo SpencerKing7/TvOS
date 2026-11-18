@@ -51,6 +51,20 @@ When the TV restarts or wakes from standby, the same service brings TvOS back to
 
 To undo it, turn the accessibility service off or uninstall TvOS. Nothing about the TV's own launcher is changed.
 
+### Optional: no Google home at all
+
+Even with the service on, Android makes TvOS wait a few seconds after Google TV opens its own home (about 15 after a restart). To skip that, turn Google TV's home app off, so TvOS is the only home left:
+
+```bash
+adb shell pm disable-user --user 0 com.google.android.apps.tv.launcherx
+```
+
+Inputs, the Assistant button and Home keep working. The remote's settings button then opens the full Settings app instead of Google's quick-settings panel, which lives inside the app you just turned off. If TvOS is ever removed, Google's own recovery screen takes over as home. To turn Google's home back on:
+
+```bash
+adb shell pm enable --user 0 com.google.android.apps.tv.launcherx
+```
+
 ## Building
 
 You need Flutter 3.24 and the Android SDK.
