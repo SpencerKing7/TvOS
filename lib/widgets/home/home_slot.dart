@@ -80,17 +80,21 @@ DateTime? watchedAt(WatchNextProgram program) {
   return DateTime.fromMillisecondsSinceEpoch(at);
 }
 
-/// What the slot stacks, top first: Now playing while music plays, then the latest shows to
-/// continue (only from [apps], the pinned ones, when given), up to [slotPlaces] cards. With
-/// nothing playing and nothing to continue, the last song.
+/// What the slot stacks, top first, up to [slotPlaces] cards: Now playing while music plays,
+/// then the most recent of the last song and the shows to continue (only from [apps], the
+/// pinned ones, when given), newest first.
 List<SlotEntry> currentSlot(NowPlayingService music, WatchNextService watch, {Set<String>? apps}) {
   final playing = music.playing;
   final watched = watch.hasPermission ? latestWatches(watch.programs, apps: apps) : const <WatchNextProgram>[];
   final last = music.lastSong;
+  final lastAt = music.lastSongAt;
+  final recent = <(DateTime, SlotEntry)>[
+    for (final program in watched) (watchedAt(program)!, SlotWatch(program)),
+    if (playing == null && last != null && lastAt != null) (lastAt, SlotTrack(last, playing: false)),
+  ]..sort((a, b) => b.$1.compareTo(a.$1));
   return [
     if (playing != null) SlotTrack(playing, playing: true, progress: music.progress),
-    for (final program in watched) SlotWatch(program),
-    if (playing == null && watched.isEmpty && last != null) SlotTrack(last, playing: false),
+    for (final (_, entry) in recent) entry,
   ].take(slotPlaces).toList();
 }
 

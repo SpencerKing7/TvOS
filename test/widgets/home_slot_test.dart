@@ -134,13 +134,28 @@ void main() {
       // Music is the top card.
       expect(tester.getTopLeft(find.text('Song')).dy, lessThan(tester.getTopLeft(find.text('Newer')).dy));
 
+      // Stopped now, so it is the newest thing: last played on top, the newer show under it.
       await send(tester, {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'playing': false});
       expect(find.text('NOW PLAYING'), findsNothing);
+      expect(find.text('LAST PLAYED'), findsOneWidget);
+      expect(find.text('Newer'), findsOneWidget);
+      expect(find.text('Older'), findsNothing);
+    });
+
+    testWidgets('a song heard before both shows gives way to them', (tester) async {
+      when(watch.programs).thenReturn([
+        program(id: 1, title: 'Newer', at: clock.add(const Duration(hours: 2)).millisecondsSinceEpoch),
+        program(id: 2, title: 'Older', at: clock.add(const Duration(hours: 1)).millisecondsSinceEpoch),
+      ]);
+      await pump(tester);
+      await send(tester, {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'playing': true});
+      await send(tester, {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'playing': false});
       expect(find.text('LAST PLAYED'), findsNothing);
+      expect(find.text('Newer'), findsOneWidget);
       expect(find.text('Older'), findsOneWidget);
     });
 
-    testWidgets('the last song only when there is nothing to continue', (tester) async {
+    testWidgets('the last song alone when there is nothing to continue', (tester) async {
       await pump(tester);
       await send(tester, {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'playing': true});
       await send(tester, {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'playing': false});
