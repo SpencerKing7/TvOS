@@ -32,6 +32,9 @@ class Standby extends StatefulWidget {
   /// Slides into standby now, from wherever [context] sits under it.
   static void enter(BuildContext context) => context.findAncestorStateOfType<StandbyState>()?.enter();
 
+  /// Brings Home back now, if it was in standby.
+  static void wake(BuildContext context) => context.findAncestorStateOfType<StandbyState>()?.wake();
+
   @override
   State<Standby> createState() => StandbyState();
 }
@@ -118,7 +121,7 @@ class StandbyState extends State<Standby> with SingleTickerProviderStateMixin, W
     _slide.forward();
   }
 
-  void _wake() {
+  void wake() {
     if (!_standby) return;
     _hintTimer?.cancel();
     setState(() => _standby = false);
@@ -144,7 +147,7 @@ class StandbyState extends State<Standby> with SingleTickerProviderStateMixin, W
     }
     if (event is KeyUpEvent && event.logicalKey == _wakeKey) {
       _wakeKey = null;
-      _wake();
+      wake();
     }
     return KeyEventResult.handled;
   }

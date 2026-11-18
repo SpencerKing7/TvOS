@@ -39,6 +39,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'flauncher_app.dart';
+import 'widgets/home/quick_panel.dart';
+
+/// The quick panel alone, over whatever app is on screen (started by QuickPanelActivity).
+@pragma('vm:entry-point')
+void quickPanelMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const QuickPanelApp());
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

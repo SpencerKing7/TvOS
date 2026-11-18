@@ -28,7 +28,8 @@ const _appKeyClickEnabledKey = "app_key_click_enabled";
 const _autoHideAppBarKey = "auto_hide_app_bar";
 const _homeFavoritesSeededKey = "home_favorites_seeded";
 const _watchNextAskedKey = "home_watch_next_asked";
-const _homeBackgroundKey = "home_background";
+/// Also written by the quick panel over other apps, which runs apart from Home.
+const homeBackgroundKey = "home_background";
 const _gradientUuidKey = "gradient_uuid";
 const _backButtonActionKey = "back_button_action";
 const _dateFormatKey = "date_format";
@@ -164,11 +165,19 @@ class SettingsService extends ChangeNotifier {
   Future<void> setWatchNextAsked() => _sharedPreferences.setBool(_watchNextAskedKey, true);
 
   /// Home screen background: 'gradient', 'landscapes' or 'video'.
-  String get homeBackground => _sharedPreferences.getString(_homeBackgroundKey) ?? 'video';
+  String get homeBackground => _sharedPreferences.getString(homeBackgroundKey) ?? 'video';
 
   Future<void> setHomeBackground(String value) async {
-    await _sharedPreferences.setString(_homeBackgroundKey, value);
+    await _sharedPreferences.setString(homeBackgroundKey, value);
     notifyListeners();
+  }
+
+  /// Picks up a background chosen in the quick panel over another app (it writes the same
+  /// file from its own engine, which this copy of the settings can't see until reloaded).
+  Future<void> reloadHomeBackground() async {
+    final before = homeBackground;
+    await _sharedPreferences.reload();
+    if (homeBackground != before) notifyListeners();
   }
 
   bool get showCategoryTitles => _showCategoryTitles;

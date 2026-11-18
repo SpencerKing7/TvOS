@@ -9,6 +9,7 @@ import 'package:flauncher/providers/watch_next_service.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
 import 'package:flauncher/widgets/home/home_slot.dart';
 import 'package:flauncher/widgets/home/home_view.dart';
+import 'package:flauncher/widgets/home/quick_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,6 +63,21 @@ void main() {
     // Each app shows twice: once in the Home rows, once in the All Apps grid below.
     expect(find.byType(HomeTile), findsNWidgets(_pinned.length * 2));
     expect(find.text('All Apps'), findsWidgets);
+  });
+
+  testWidgets('the settings button opens the quick panel, and Home closes it', (tester) async {
+    await _pumpHome(tester);
+    Future<void> fromTv(String method) async {
+      final codec = const StandardMethodCodec();
+      await tester.binding.defaultBinaryMessenger
+          .handlePlatformMessage('tvos/quick_panel', codec.encodeMethodCall(MethodCall(method)), (_) {});
+      await tester.pumpAndSettle();
+    }
+
+    await fromTv('opened');
+    expect(find.byType(QuickPanel), findsOneWidget);
+    await fromTv('home');
+    expect(find.byType(QuickPanel), findsNothing);
   });
 
   testWidgets('moving an app tells the background, so the photo credit steps aside', (tester) async {
