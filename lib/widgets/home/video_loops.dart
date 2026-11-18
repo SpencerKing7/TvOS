@@ -63,6 +63,7 @@ const videoClips = [
   VideoClip('30700901/13135908_1920_1080_60fps.mp4'), // clouds: cloud spilling over a ridge at dusk
   VideoClip('16461789/16461789-hd_1920_1080_60fps.mp4'), // water: sun setting over a lake
   VideoClip('28647791/12442287_1920_1080_60fps.mp4'), // light: mist over a river plain at dawn
+  VideoClip('35742725/15150739_1920_1080_60fps.mp4'), // water: a river through striped sandstone, Utah
   VideoClip('30859401/13196587_1920_1080_60fps.mp4'), // mountains: a snow-dusted summit
   VideoClip('38688892/16434219_1920_1080_60fps.mp4'), // forest: a forested limestone peak
   VideoClip('35410029/15003059_1920_1080_60fps.mp4'), // water: a braided river below snowy peaks
