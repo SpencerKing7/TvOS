@@ -54,7 +54,6 @@ const videoClips = [
   VideoClip('14862547/14862547-hd_1920_1080_60fps.mp4'), // clouds: cloud flowing through peaks
   VideoClip('29477418/12689287_1920_1080_60fps.mp4'), // water: ice on a black-sand shore at sunset
   VideoClip('38520557/16358890_1920_1080_60fps.mp4'), // light: the sun over a golden cloud valley
-  VideoClip('33285456/14178183_1920_1080_60fps.mp4'), // mountains: Fitz Roy in golden light
   VideoClip('38903112/16542886_1920_1080_60fps.mp4'), // forest: woodland at sunrise
   VideoClip('28811521/12483473_1920_1080_60fps.mp4'), // water: a windswept lake below cliffs
   VideoClip('37943267/16100580_1920_1080_60fps.mp4'), // desert: a lone cone on a salt flat
