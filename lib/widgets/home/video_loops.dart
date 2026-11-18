@@ -47,6 +47,7 @@ const videoClips = [
   VideoClip('31332724/13373828_1920_1080_60fps.mp4'), // light: sun rays over hazy ranges
   VideoClip('29415859/12666746_1920_1080_60fps.mp4'), // mountains: snowfields under a blue sky
   VideoClip('18757530/18757530-hd_1920_1080_60fps.mp4'), // forest: pine-covered mountainsides
+  VideoClip('34493786/14615403_1920_1080_60fps.mp4'), // desert: Wilson Arch near Moab, Utah
   VideoClip('38361089/16290220_1920_1080_60fps.mp4'), // water: islands in a mountain lake
   VideoClip('30791936/13170365_1920_1080_60fps.mp4'), // desert: white sand dunes
   VideoClip('34505194/14619922_1920_1080_60fps.mp4'), // mountains: snowy ridges above a cloud sea
@@ -57,6 +58,7 @@ const videoClips = [
   VideoClip('38903112/16542886_1920_1080_60fps.mp4'), // forest: woodland at sunrise
   VideoClip('28811521/12483473_1920_1080_60fps.mp4'), // water: a windswept lake below cliffs
   VideoClip('37943267/16100580_1920_1080_60fps.mp4'), // desert: a lone cone on a salt flat
+  VideoClip('36432324/15448230_1920_1080_60fps.mp4'), // light: sunset over snowy Utah canyon country
   VideoClip('34293610/14530597_1920_1080_60fps.mp4'), // mountains: a green valley below snowy peaks
   VideoClip('30700901/13135908_1920_1080_60fps.mp4'), // clouds: cloud spilling over a ridge at dusk
   VideoClip('16461789/16461789-hd_1920_1080_60fps.mp4'), // water: sun setting over a lake
@@ -64,6 +66,7 @@ const videoClips = [
   VideoClip('30859401/13196587_1920_1080_60fps.mp4'), // mountains: a snow-dusted summit
   VideoClip('38688892/16434219_1920_1080_60fps.mp4'), // forest: a forested limestone peak
   VideoClip('35410029/15003059_1920_1080_60fps.mp4'), // water: a braided river below snowy peaks
+  VideoClip('36143048/15327633_1920_1080_60fps.mp4'), // clouds: cloud on the Wasatch, Utah
   VideoClip('36460250/15460732_1920_1080_60fps.mp4'), // desert: red cliffs under a blue sky
   VideoClip('31985994/13630845_1920_1080_60fps.mp4'), // clouds: the sun above a cloud sea
   VideoClip('29057836/12560425_1920_1080_60fps.mp4'), // water: mist on a still lake at sunrise
