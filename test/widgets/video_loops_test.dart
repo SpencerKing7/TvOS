@@ -13,4 +13,11 @@ void main() {
     final names = videoClips.map((clip) => clip.name).toList();
     expect(names.toSet().length, names.length);
   });
+
+  test('every clip carries its length, so its end is seen coming', () {
+    // Most Pexels files can't tell the player how long they are.
+    for (final clip in videoClips) {
+      expect(clip.seconds, greaterThan(8), reason: clip.file);
+    }
+  });
 }
