@@ -79,6 +79,7 @@ test/mocks.mocks.dart
 
 # Local Tools, Libs & Scripts
 *.py
+!scripts/bump-version.py
 sqlite_lib/
 com.leanbitlab.ltvL.yml
 *.db
