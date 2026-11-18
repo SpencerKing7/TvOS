@@ -254,10 +254,8 @@ class _HomeViewState extends State<HomeView> {
                     children: [
                       Align(
                         alignment: Alignment.topLeft,
-                        // Out toward the screen corner, mirroring the settings button on the right.
-                        child: Transform.translate(
-                          offset: const Offset(-(_sidePadding - 6), 0),
-                          child: Padding(
+                        // Left edge on the app tiles' left edge, so the whole screen hangs off one line.
+                        child: Padding(
                             // The menu button sits out past the content margin, so a little room is enough.
                             padding: const EdgeInsets.only(top: 18, right: 24),
                             child: heroMusic
@@ -266,26 +264,25 @@ class _HomeViewState extends State<HomeView> {
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                     children: [
                                       const Align(alignment: Alignment.centerLeft, child: TopInfo(compact: true)),
-                                      const SizedBox(height: 22),
-                                      slot,
+                                      const SizedBox(height: 24),
+                                      Align(alignment: Alignment.centerLeft, child: slot),
                                     ],
                                   )
-                                // Otherwise the full clock on the left, and recent things down the right,
-                                // clear of the menu button.
+                                // Otherwise the full clock, a hairline, then recent things, all flowing left
+                                // from one top edge.
                                 : Row(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       const TopInfo(),
-                                      const SizedBox(width: 44),
-                                      Expanded(
-                                        child: Align(
-                                          alignment: Alignment.topRight,
-                                          child: Padding(padding: const EdgeInsets.only(top: 52), child: slot),
-                                        ),
-                                      ),
+                                      if (slots.isNotEmpty) ...[
+                                        const SizedBox(width: 40),
+                                        // As tall as the cards beside it: one card, or two and the gap between.
+                                        SlotDivider(height: slots.length > 1 ? TrackCard.artSize * 2 + 20 : TrackCard.artSize),
+                                        const SizedBox(width: 36),
+                                      ],
+                                      Flexible(child: slot),
                                     ],
                                   ),
-                          ),
                         ),
                       ),
                       Align(

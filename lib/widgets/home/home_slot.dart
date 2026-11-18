@@ -8,6 +8,7 @@
  */
 
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:collection/collection.dart';
 import 'package:flauncher/models/watch_next_program.dart';
@@ -102,7 +103,7 @@ List<SlotEntry> currentSlot(NowPlayingService music, WatchNextService watch, {Se
 /// is nothing to show; it can be focused (Up from the top row), Up / Down move between the
 /// cards, and OK opens the focused one.
 class HomeSlot extends StatefulWidget {
-  static const double _minWidth = TrackCard.artSize + 18 + 80;
+  static const double _minWidth = WatchCard.posterWidth + 18 + 80;
 
   final List<SlotEntry> entries;
 
@@ -158,6 +159,13 @@ class _HomeSlotState extends State<HomeSlot> {
     return KeyEventResult.handled;
   }
 
+  // Beside the hero there is less room, so the side card's words stay narrow.
+  Widget _sideCard(SlotEntry entry, bool focused) => switch (entry) {
+        SlotTrack(:final track, :final playing, :final progress) => TrackCard(
+            key: ValueKey(entry.key), track: track, playing: playing, progress: progress, focused: focused, textWidth: 206),
+        SlotWatch(:final program) => WatchCard(key: ValueKey(entry.key), program: program, focused: focused, textWidth: 206),
+      };
+
   Widget _card(SlotEntry entry, bool focused) => switch (entry) {
         SlotTrack(:final track, :final playing, :final progress) =>
           TrackCard(key: ValueKey(entry.key), track: track, playing: playing, progress: progress, focused: focused),
@@ -183,33 +191,33 @@ class _HomeSlotState extends State<HomeSlot> {
         children: [
           // Each place crossfades on its own, so music starting only changes what moves.
           for (var i = 0; i < slotPlaces; i++) ...[
-            if (i > 0 && i < widget.entries.length) const SizedBox(height: 14),
+            if (i > 0 && i < widget.entries.length) const SizedBox(height: 20),
             _place(i, _card),
           ],
         ],
       );
 
-  /// The playing song large on the left; whatever else there is, small, at the bottom right.
+  /// The playing song large, then whatever else there is, small, after a hairline; all flowing left.
   Widget _heroLayout() {
     final top = widget.entries.first as SlotTrack;
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: NowPlayingHero(
-              key: ValueKey(top.key),
-              track: top.track,
-              progress: top.progress,
-              focused: _focused && _index == 0,
-            ),
+        Flexible(
+          child: NowPlayingHero(
+            key: ValueKey(top.key),
+            track: top.track,
+            progress: top.progress,
+            focused: _focused && _index == 0,
           ),
         ),
         for (var i = 1; i < slotPlaces; i++)
           if (i < widget.entries.length) ...[
-            const SizedBox(width: 32),
-            _place(i, _card),
+            const SizedBox(width: 28),
+            const SlotDivider(height: NowPlayingHero.artSize * 0.75),
+            const SizedBox(width: 28),
+            _place(i, _sideCard),
           ],
       ],
     );
@@ -238,9 +246,19 @@ class _HomeSlotState extends State<HomeSlot> {
   }
 }
 
+/// The thin vertical rule between sections of the top half.
+class SlotDivider extends StatelessWidget {
+  final double height;
+
+  const SlotDivider({super.key, required this.height});
+
+  @override
+  Widget build(BuildContext context) => Container(width: 1, height: height, color: Colors.white24);
+}
+
 /// Now playing as the main attraction: large art, title, artist and progress.
 class NowPlayingHero extends StatelessWidget {
-  static const double artSize = 150;
+  static const double artSize = 120;
 
   final Track track;
   final TrackProgress? progress;
@@ -282,7 +300,7 @@ class NowPlayingHero extends StatelessWidget {
           const SizedBox(width: 28),
           Flexible(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
+              constraints: const BoxConstraints(maxWidth: 400),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -296,18 +314,18 @@ class NowPlayingHero extends StatelessWidget {
                     track.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w500, height: 1.15, shadows: homeTextShadows),
+                    style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w500, height: 1.15, shadows: homeTextShadows),
                   ),
                   if (track.artist.isNotEmpty)
                     Text(
                       track.artist,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white70, fontSize: 22, shadows: homeTextShadows),
+                      style: const TextStyle(color: Colors.white70, fontSize: 20, shadows: homeTextShadows),
                     ),
                   if (progress != null) ...[
                     const SizedBox(height: 6),
-                    TrackProgressBar(progress!, width: 360),
+                    TrackProgressBar(progress!, width: 300),
                   ],
                 ],
               ),
@@ -326,21 +344,42 @@ class TrackCard extends StatelessWidget {
   final TrackProgress? progress;
   final bool focused;
 
-  const TrackCard({super.key, required this.track, required this.playing, this.progress, this.focused = false});
+  final double textWidth;
+
+  const TrackCard(
+      {super.key, required this.track, required this.playing, this.progress, this.focused = false, this.textWidth = 300});
 
   @override
   Widget build(BuildContext context) => _SlotCard(
-        image: SizedBox.square(
-          dimension: artSize,
+        // The same 16:9 frame as a show's poster, so stacked cards line up: the square art in
+        // the middle, a blurred, darkened copy of it filling the sides.
+        image: SizedBox(
+          width: WatchCard.posterWidth,
+          height: artSize,
           child: track.art == null
               ? const _Glyph(Icons.music_note_rounded)
-              : Image.memory(
-                  track.art!,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.medium,
-                  // A broken image from an app is no worse than having none.
-                  errorBuilder: (_, __, ___) => const _Glyph(Icons.music_note_rounded),
+              : Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ImageFiltered(
+                      imageFilter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                      child: Image.memory(track.art!, fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, __, ___) => const SizedBox()),
+                    ),
+                    const ColoredBox(color: Colors.black38),
+                    Center(
+                      child: SizedBox.square(
+                        dimension: artSize,
+                        child: Image.memory(
+                          track.art!,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                          filterQuality: FilterQuality.medium,
+                          // A broken image from an app is no worse than having none.
+                          errorBuilder: (_, __, ___) => const _Glyph(Icons.music_note_rounded),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
         ),
         caption: playing ? 'NOW PLAYING' : 'LAST PLAYED',
@@ -349,6 +388,7 @@ class TrackCard extends StatelessWidget {
         footer: playing && progress != null ? TrackProgressBar(progress!) : null,
         dim: !playing,
         focused: focused,
+        textWidth: textWidth,
       );
 }
 
@@ -428,7 +468,9 @@ class WatchCard extends StatelessWidget {
   final WatchNextProgram program;
   final bool focused;
 
-  const WatchCard({super.key, required this.program, this.focused = false});
+  final double textWidth;
+
+  const WatchCard({super.key, required this.program, this.focused = false, this.textWidth = 300});
 
   @override
   Widget build(BuildContext context) {
@@ -459,6 +501,7 @@ class WatchCard extends StatelessWidget {
       subtitle: program.description,
       dim: false,
       focused: focused,
+      textWidth: textWidth,
     );
   }
 }
@@ -471,8 +514,10 @@ class _SlotCard extends StatelessWidget {
   final Widget? footer;
   final bool dim;
   final bool focused;
+  final double textWidth;
 
   const _SlotCard({
+    this.textWidth = 300,
     required this.image,
     required this.caption,
     required this.title,
@@ -509,7 +554,7 @@ class _SlotCard extends StatelessWidget {
             const SizedBox(width: 18),
             Flexible(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 300),
+                constraints: BoxConstraints(maxWidth: textWidth),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
