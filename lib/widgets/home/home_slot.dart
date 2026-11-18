@@ -432,12 +432,14 @@ class HeroCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFF2A2A2E),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: focused && imageFocused ? Colors.white : Colors.transparent, width: 2),
                 boxShadow: [
                   BoxShadow(
                       color: Colors.black.withOpacity(focused && imageFocused ? 0.5 : 0.38),
                       blurRadius: focused && imageFocused ? 20 : 14,
                       offset: const Offset(0, 4)),
+                  // Focus is a soft white glow, as on the app tiles: no outline.
+                  if (focused && imageFocused)
+                    BoxShadow(color: Colors.white.withOpacity(0.28), blurRadius: 32, spreadRadius: 1),
                 ],
               ),
               clipBehavior: Clip.antiAlias,
@@ -467,13 +469,13 @@ class HeroCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   GlideText(
                     title,
-                    gliding: focused,
+                    gliding: true,
                     style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w500, shadows: homeTextShadows),
                   ),
                   if (subtitle.isNotEmpty)
                     GlideText(
                       subtitle,
-                      gliding: focused,
+                      gliding: true,
                       style: const TextStyle(color: Colors.white70, fontSize: 17, shadows: homeTextShadows),
                     ),
                   // The bar's room is kept with or without a bar, so the card is always one
@@ -776,9 +778,10 @@ class _SlotCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFF2A2A2E),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: focused ? Colors.white : Colors.transparent, width: 2),
                   boxShadow: [
                     BoxShadow(color: Colors.black.withOpacity(focused ? 0.5 : 0.38), blurRadius: focused ? 20 : 14, offset: const Offset(0, 4)),
+                    // Focus is a soft white glow, as on the app tiles: no outline.
+                    if (focused) BoxShadow(color: Colors.white.withOpacity(0.28), blurRadius: 32, spreadRadius: 1),
                   ],
                 ),
                 clipBehavior: Clip.antiAlias,
@@ -801,13 +804,13 @@ class _SlotCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     GlideText(
                       title,
-                      gliding: focused,
+                      gliding: true,
                       style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w500, shadows: homeTextShadows),
                     ),
                     if (subtitle.isNotEmpty)
                       GlideText(
                         subtitle,
-                        gliding: focused,
+                        gliding: true,
                         style: const TextStyle(color: Colors.white70, fontSize: 17, shadows: homeTextShadows),
                       ),
                     if (footer != null) footer!,
