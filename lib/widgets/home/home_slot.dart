@@ -211,15 +211,16 @@ class _HomeSlotState extends State<HomeSlot> {
       );
 
   /// The most current thing large, then the next, small, after a hairline; all flowing left.
+  // Top-aligned, so both cards' art, captions and titles sit level; a song's bar hangs below.
   Widget _heroLayout() => Row(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Flexible(child: _place(0, _heroCard)),
           for (var i = 1; i < slotPlaces; i++)
             if (i < widget.entries.length) ...[
               const SizedBox(width: 28),
-              const SlotDivider(height: HeroCard.height * 0.75),
+              const SlotDivider(height: HeroCard.height),
               const SizedBox(width: 28),
               _place(i, _sideCard),
             ],
@@ -267,11 +268,15 @@ class SlotDivider extends StatelessWidget {
   Widget build(BuildContext context) => Container(width: 1, height: height, color: Colors.white24);
 }
 
-/// The main attraction of the top half: large art (square for music, 16:9 for a show), a
+/// The first card of the top half: art (square for music, 16:9 for a show), a
 /// caption, the title, a second line, and progress.
 class HeroCard extends StatelessWidget {
-  static const double height = 120;
+  // The same height as the card beside it, so the two sit level.
+  static const double height = TrackCard.artSize;
   static const double textWidth = 260;
+
+  /// A song's bar with its times row: the tallest footer.
+  static const double footerHeight = 10 + 3 + 5 + 26;
 
   final Widget image;
   final double imageWidth;
@@ -356,9 +361,10 @@ class HeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AnimatedScale(
-            scale: focused && imageFocused ? 1.04 : 1,
+            scale: focused && imageFocused ? 1.06 : 1,
             duration: const Duration(milliseconds: 160),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
@@ -366,13 +372,13 @@ class HeroCard extends StatelessWidget {
               height: height,
               decoration: BoxDecoration(
                 color: const Color(0xFF2A2A2E),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: focused && imageFocused ? Colors.white : Colors.transparent, width: 2),
                 boxShadow: [
                   BoxShadow(
-                      color: Colors.black.withOpacity(focused && imageFocused ? 0.55 : 0.45),
-                      blurRadius: focused && imageFocused ? 30 : 24,
-                      offset: const Offset(0, 8)),
+                      color: Colors.black.withOpacity(focused && imageFocused ? 0.5 : 0.38),
+                      blurRadius: focused && imageFocused ? 20 : 14,
+                      offset: const Offset(0, 4)),
                 ],
               ),
               clipBehavior: Clip.antiAlias,
@@ -385,7 +391,7 @@ class HeroCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 28),
+          const SizedBox(width: 18),
           // A set width, whatever the title or whether a bar shows, so nothing beside it shifts;
           // it gives way only when a wide poster leaves less room.
           Flexible(
@@ -397,24 +403,24 @@ class HeroCard extends StatelessWidget {
                 children: [
                   Text(
                     caption,
-                    style: const TextStyle(color: Colors.white60, fontSize: 13, letterSpacing: 2, fontWeight: FontWeight.w600, shadows: homeTextShadows),
+                    style: const TextStyle(color: Colors.white60, fontSize: 12, letterSpacing: 1.4, fontWeight: FontWeight.w600, shadows: homeTextShadows),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 4),
                   GlideText(
                     title,
                     gliding: focused,
-                    style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w500, height: 1.15, shadows: homeTextShadows),
+                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w500, shadows: homeTextShadows),
                   ),
                   if (subtitle.isNotEmpty)
                     GlideText(
                       subtitle,
                       gliding: focused,
-                      style: const TextStyle(color: Colors.white70, fontSize: 20, shadows: homeTextShadows),
+                      style: const TextStyle(color: Colors.white70, fontSize: 17, shadows: homeTextShadows),
                     ),
-                  if (footer != null) ...[
-                    const SizedBox(height: 6),
-                    footer!,
-                  ],
+                  // The bar's room is kept with or without a bar, so the card is always one
+                  // height and the row can sit centred without moving when the bar comes or goes.
+                  const SizedBox(height: 2),
+                  SizedBox(height: footerHeight, child: footer),
                 ],
               ),
             ),
@@ -695,6 +701,7 @@ class _SlotCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AnimatedScale(
               scale: focused ? 1.06 : 1,
