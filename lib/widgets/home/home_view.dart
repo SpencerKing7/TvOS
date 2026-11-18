@@ -20,10 +20,9 @@ import 'package:flauncher/widgets/app_card_keys.dart';
 import 'package:flauncher/widgets/focus_keyboard_listener.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
 import 'package:flauncher/widgets/home/home_slot.dart';
+import 'package:flauncher/widgets/home/quick_panel.dart';
 import 'package:flauncher/widgets/home/standby.dart';
 import 'package:flauncher/widgets/home/top_info.dart';
-import 'package:flauncher/widgets/home/video_loops.dart';
-import 'package:flauncher/widgets/settings/settings_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -100,6 +99,19 @@ class _HomeViewState extends State<HomeView> {
     super.initState();
     _seedFavoritesOnce();
     WidgetsBinding.instance.addPostFrameCallback((_) => _askForWatchNextOnce());
+    // The remote's settings button, pressed while Home is in front, opens Home's own panel.
+    QuickPanelChannel.onOpened = () {
+      if (!mounted) return;
+      Standby.wake(context);
+      _showHomeMenu();
+    };
+    // A background picked in the panel over an app shows once Home is back.
+    _lifecycle = AppLifecycleListener(onResume: () => context.read<SettingsService>().reloadHomeBackground());
+    // Home pressed on Home: close whatever is open over it (the panel, a dialog).
+    QuickPanelChannel.onHome = () {
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    };
     // Tell the background how far into All Apps we are, so it can dim behind the grid.
     _scroll.addListener(() {
       final height = MediaQuery.sizeOf(context).height;
@@ -152,20 +164,34 @@ class _HomeViewState extends State<HomeView> {
     }
   }
 
+  bool _panelOpen = false;
+  late final AppLifecycleListener _lifecycle;
+
+  /// The quick panel: inputs, Settings pages, and Home's background as a submenu.
   Future<void> _showHomeMenu() async {
+    if (_panelOpen) return;
+    _panelOpen = true;
     final settings = context.read<SettingsService>();
-    final choice = await showDialog<String>(
+    await showGeneralDialog<void>(
       context: context,
-      barrierColor: Colors.black54,
-      builder: (_) => _HomeMenu(background: settings.homeBackground),
+      barrierDismissible: false,
+      // Barely dimmed: the panel is the focus, not a curtain over Home.
+      barrierColor: Colors.black12,
+      transitionDuration: const Duration(milliseconds: 260),
+      transitionBuilder: (context, t, _, child) => slideFromRight(t, child),
+      pageBuilder: (dialogContext, _, __) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => QuickPanel(
+          background: settings.homeBackground,
+          onBackground: (value) async {
+            await settings.setHomeBackground(value);
+            setDialogState(() {});
+          },
+          onClose: () => Navigator.of(dialogContext).pop(),
+        ),
+      ),
     );
-    if (!mounted || choice == null) return;
-    if (choice == 'settings') {
-      await showDialog(context: context, builder: (_) => const SettingsPanel());
-    } else {
-      await settings.setHomeBackground(choice);
-    }
-    _menuNode.requestFocus();
+    _panelOpen = false;
+    if (mounted) _menuNode.requestFocus();
   }
 
   /// One focus node per home app, so focus can be put back on a specific slot.
@@ -178,6 +204,9 @@ class _HomeViewState extends State<HomeView> {
 
   @override
   void dispose() {
+    QuickPanelChannel.onOpened = null;
+    QuickPanelChannel.onHome = null;
+    _lifecycle.dispose();
     _scroll.dispose();
     _menuNode.dispose();
     _slotNode.dispose();
@@ -546,7 +575,7 @@ class _MenuButtonState extends State<_MenuButton> {
             ],
           ),
           child: Icon(
-            Icons.tune_rounded,
+            Icons.settings_rounded,
             size: 14,
             color: _focused ? Colors.black : Colors.white60,
             shadows: _focused ? null : const [Shadow(color: Colors.black54, blurRadius: 4)],
@@ -556,74 +585,6 @@ class _MenuButtonState extends State<_MenuButton> {
 }
 
 /// Background choice plus a way into the full launcher settings.
-class _HomeMenu extends StatelessWidget {
-  final String background;
-
-  const _HomeMenu({required this.background});
-
-  @override
-  Widget build(BuildContext context) {
-    Widget option(String value, IconData icon, String label, {bool enabled = true, bool first = false}) {
-      final selected = background == value;
-      return TextButton(
-        autofocus: first,
-        onPressed: enabled ? () => Navigator.of(context).pop(value) : null,
-        style: ButtonStyle(
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 18, vertical: 14)),
-          alignment: Alignment.centerLeft,
-          shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-          foregroundColor: WidgetStateProperty.resolveWith((states) =>
-              states.contains(WidgetState.focused) ? Colors.black : (enabled ? Colors.white : Colors.white38)),
-          backgroundColor: WidgetStateProperty.resolveWith(
-              (states) => states.contains(WidgetState.focused) ? Colors.white : Colors.transparent),
-          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 22),
-            const SizedBox(width: 14),
-            Expanded(child: Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500))),
-            if (selected) const Icon(Icons.check_rounded, size: 22),
-          ],
-        ),
-      );
-    }
-
-    return Align(
-      alignment: Alignment.topRight,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 64, right: 20),
-        child: Material(
-          color: const Color(0xF21E1E22),
-          borderRadius: BorderRadius.circular(20),
-          child: SizedBox(
-            width: 340,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(18, 8, 18, 8),
-                    child: Text('Background', style: TextStyle(color: Colors.white54, fontSize: 15)),
-                  ),
-                  option('gradient', Icons.gradient_rounded, 'Gradient', first: true),
-                  option('landscapes', Icons.landscape_rounded, 'Landscapes'),
-                  option('video', Icons.movie_filter_rounded, videoLoopsAvailable ? 'Video loops' : 'Video loops (needs setup)',
-                      enabled: videoLoopsAvailable),
-                  const Divider(color: Colors.white12, height: 20),
-                  option('settings', Icons.settings_rounded, 'Launcher settings'),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 bool _okHeld() => HardwareKeyboard.instance.logicalKeysPressed.any(AppCardKeys.validationKeys.contains);
 
 class _TileGrid extends StatelessWidget {

@@ -76,7 +76,7 @@ public class LauncherAccessibilityService extends AccessibilityService {
             return true; // Consume Home key event
         }
         if (isSettingsKey(event.getKeyCode()) && !googleHomeEnabled()) {
-            if (event.getAction() == KeyEvent.ACTION_DOWN) openSettings();
+            if (event.getAction() == KeyEvent.ACTION_DOWN) openQuickPanel();
             return true;
         }
         return super.onKeyEvent(event);
@@ -96,8 +96,15 @@ public class LauncherAccessibilityService extends AccessibilityService {
         }
     }
 
-    private void openSettings() {
-        startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    /** Home in front opens its own panel (with the background menu); over an app, the see-through one. */
+    private void openQuickPanel() {
+        if (MainActivity.inFront) {
+            startActivity(new Intent(this, MainActivity.class)
+                    .putExtra(MainActivity.EXTRA_QUICK_PANEL, true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+        } else {
+            QuickPanelActivity.open(this);
+        }
     }
 
     private void bringForward() {

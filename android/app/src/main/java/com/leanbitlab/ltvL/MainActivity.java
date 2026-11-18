@@ -77,6 +77,39 @@ import android.service.notification.StatusBarNotification;
 import android.content.ComponentName;
 
 public class MainActivity extends FlutterActivity {
+    /** Set by the settings button while Home is in front: open Home's own quick panel. */
+    static final String EXTRA_QUICK_PANEL = "tvos.quick_panel";
+
+    private MethodChannel quickPanel;
+
+    /**
+     * Whether Home is the screen in front. The Home Button service runs in this process, so it
+     * reads this directly rather than guessing from window events (it misses the ones before
+     * it starts).
+     */
+    static volatile boolean inFront = false;
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        inFront = true;
+    }
+
+    @Override
+    protected void onPause() {
+        inFront = false;
+        super.onPause();
+    }
+
+    @Override
+    protected void onNewIntent(@NonNull Intent intent) {
+        super.onNewIntent(intent);
+        if (quickPanel == null) return;
+        // The settings button asks for the panel; anything else bringing Home forward is the
+        // Home button, which closes whatever is open over Home.
+        quickPanel.invokeMethod(intent.getBooleanExtra(EXTRA_QUICK_PANEL, false) ? "opened" : "home", null);
+    }
+
     private final String METHOD_CHANNEL = "me.efesser.flauncher/method";
     private final String APPS_EVENT_CHANNEL = "me.efesser.flauncher/event_apps";
     private final String NETWORK_EVENT_CHANNEL = "me.efesser.flauncher/event_network";
@@ -94,6 +127,12 @@ public class MainActivity extends FlutterActivity {
 
         BinaryMessenger messenger = flutterEngine.getDartExecutor().getBinaryMessenger();
         nowPlaying = new NowPlayingStreamHandler(getApplicationContext());
+        // Home's own copy of the quick panel: closing it needs nothing from the activity.
+        quickPanel = QuickPanel.register(messenger, this, () -> {});
+        if (getIntent() != null && getIntent().getBooleanExtra(EXTRA_QUICK_PANEL, false)) {
+            getIntent().removeExtra(EXTRA_QUICK_PANEL);
+            quickPanel.invokeMethod("opened", null);
+        }
 
         new MethodChannel(messenger, METHOD_CHANNEL).setMethodCallHandler((call, result) -> {
             switch (call.method) {
