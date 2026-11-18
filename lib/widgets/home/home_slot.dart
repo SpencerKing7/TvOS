@@ -55,21 +55,37 @@ class SlotTrack extends SlotEntry {
   String get key => '${playing ? 'playing' : 'last'}:${track.key}';
 }
 
+/// Up to [maxWatches] things to continue watching, newest first, stacked.
 class SlotWatch extends SlotEntry {
-  final WatchNextProgram program;
+  final List<WatchNextProgram> programs;
 
-  const SlotWatch(this.program);
+  const SlotWatch(this.programs);
 
   @override
-  String get key => 'watch:${program.id}:${program.posterArtUri}';
+  String get key => 'watch:${programs.map((p) => '${p.id}:${p.posterArtUri}').join(',')}';
 }
+
+const int maxWatches = 2;
 
 // TvContract.WatchNextPrograms.WATCH_NEXT_TYPE_WATCHLIST: saved for later, not something left part-way.
 const _watchlist = 3;
 
+/// The Watch Next items worth continuing, newest first, at most [count]; only from [apps] when given.
+List<WatchNextProgram> latestWatches(List<WatchNextProgram> programs, {Set<String>? apps, int count = maxWatches}) =>
+    (programs
+            .where((p) =>
+                p.title.isNotEmpty &&
+                p.watchNextType != _watchlist &&
+                watchedAt(p) != null &&
+                (apps == null || apps.contains(p.packageName)))
+            .toList()
+          ..sort((a, b) => watchedAt(b)!.compareTo(watchedAt(a)!)))
+        .take(count)
+        .toList();
+
 /// The most recent Watch Next item worth continuing, if any.
-WatchNextProgram? latestWatch(List<WatchNextProgram> programs) =>
-    programs.firstWhereOrNull((p) => p.title.isNotEmpty && p.watchNextType != _watchlist && watchedAt(p) != null);
+WatchNextProgram? latestWatch(List<WatchNextProgram> programs, {Set<String>? apps}) =>
+    latestWatches(programs, apps: apps, count: 1).firstOrNull;
 
 /// When [program] was last watched; Watch Next times arrive in seconds from some apps.
 DateTime? watchedAt(WatchNextProgram program) {
@@ -80,28 +96,29 @@ DateTime? watchedAt(WatchNextProgram program) {
 }
 
 /// What the slot shows now: Now playing while music plays, otherwise whichever happened last,
-/// the last song or the last thing watched.
-SlotEntry? currentSlot(NowPlayingService music, WatchNextService watch) {
+/// the last song or the last things watched (only from [apps], the pinned ones, when given).
+SlotEntry? currentSlot(NowPlayingService music, WatchNextService watch, {Set<String>? apps}) {
   final playing = music.playing;
   final last = music.lastSong;
-  final watched = watch.hasPermission ? latestWatch(watch.programs) : null;
+  final watched = watch.hasPermission ? latestWatches(watch.programs, apps: apps) : const <WatchNextProgram>[];
   return pickSlot<SlotEntry>(
     live: playing == null ? null : SlotTrack(playing, playing: true, progress: music.progress),
     recent: [
       (music.lastSongAt, last == null ? null : SlotTrack(last, playing: false)),
-      (watched == null ? null : watchedAt(watched), watched == null ? null : SlotWatch(watched)),
+      (watched.isEmpty ? null : watchedAt(watched.first), watched.isEmpty ? null : SlotWatch(watched)),
     ],
   );
 }
 
 /// The one space right of the time and weather. Empty when there is nothing to show; it can
-/// be focused (Up from the top row) and OK opens what it shows.
+/// be focused (Up from the top row), Up / Down move between stacked cards, and OK opens the
+/// focused one (its index goes to [onSelect]).
 class HomeSlot extends StatefulWidget {
   static const double _minWidth = TrackCard.artSize + 18 + 80;
 
   final SlotEntry? entry;
   final FocusNode? focusNode;
-  final VoidCallback? onSelect;
+  final ValueChanged<int>? onSelect;
   final VoidCallback? onDown;
   final VoidCallback? onRight;
 
@@ -113,20 +130,35 @@ class HomeSlot extends StatefulWidget {
 
 class _HomeSlotState extends State<HomeSlot> {
   bool _focused = false;
+  int _index = 0;
+
+  int get _count => switch (widget.entry) { SlotWatch(:final programs) => programs.length, null => 0, _ => 1 };
+
+  @override
+  void didUpdateWidget(HomeSlot old) {
+    super.didUpdateWidget(old);
+    if (_index >= _count) _index = _count == 0 ? 0 : _count - 1;
+  }
 
   KeyEventResult _onKey(FocusNode _, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
     if (AppCardKeys.validationKeys.contains(key)) {
-      widget.onSelect?.call();
+      widget.onSelect?.call(_index);
     } else if (key == LogicalKeyboardKey.arrowDown) {
-      widget.onDown?.call();
+      if (_index < _count - 1) {
+        setState(() => _index++);
+      } else {
+        widget.onDown?.call();
+      }
+    } else if (key == LogicalKeyboardKey.arrowUp) {
+      // Up leads nowhere from the top card.
+      if (_index > 0) setState(() => _index--);
     } else if (key == LogicalKeyboardKey.arrowRight) {
       widget.onRight?.call();
-    } else if (key != LogicalKeyboardKey.arrowUp && key != LogicalKeyboardKey.arrowLeft) {
+    } else if (key != LogicalKeyboardKey.arrowLeft) {
       return KeyEventResult.ignored;
     }
-    // Up and Left lead nowhere from the top corner.
     return KeyEventResult.handled;
   }
 
@@ -137,7 +169,17 @@ class _HomeSlotState extends State<HomeSlot> {
       null => const SizedBox.shrink(key: ValueKey('empty')),
       SlotTrack(:final track, :final playing, :final progress) =>
         TrackCard(key: ValueKey(entry.key), track: track, playing: playing, progress: progress, focused: _focused),
-      SlotWatch(:final program) => WatchCard(key: ValueKey(entry.key), program: program, focused: _focused),
+      SlotWatch(:final programs) => Column(
+          key: ValueKey(entry.key),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < programs.length; i++) ...[
+              if (i > 0) const SizedBox(height: 14),
+              WatchCard(program: programs[i], focused: _focused && i == _index),
+            ],
+          ],
+        ),
     };
 
     return LayoutBuilder(
@@ -147,7 +189,11 @@ class _HomeSlotState extends State<HomeSlot> {
           : Focus(
               focusNode: widget.focusNode,
               canRequestFocus: entry != null,
-              onFocusChange: (focused) => setState(() => _focused = focused),
+              // Coming back into the slot always starts on the top card.
+              onFocusChange: (focused) => setState(() {
+                _focused = focused;
+                if (!focused) _index = 0;
+              }),
               onKeyEvent: _onKey,
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 600),
