@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:transparent_image/transparent_image.dart';
 
 import '../mocks.mocks.dart';
 
@@ -118,7 +119,7 @@ void main() {
       expect(find.text('Song'), findsOneWidget);
     });
 
-    testWidgets('music on top while it plays, the latest show under it', (tester) async {
+    testWidgets('music in the hero spot while it plays, the latest show beside it', (tester) async {
       when(watch.programs).thenReturn([
         program(id: 1, title: 'Newer', at: clock.millisecondsSinceEpoch),
         program(id: 2, title: 'Older', at: clock.subtract(const Duration(hours: 1)).millisecondsSinceEpoch),
@@ -131,8 +132,8 @@ void main() {
       expect(find.text('NOW PLAYING'), findsOneWidget);
       expect(find.text('Newer'), findsOneWidget);
       expect(find.text('Older'), findsNothing);
-      // Music is the top card.
-      expect(tester.getTopLeft(find.text('Song')).dy, lessThan(tester.getTopLeft(find.text('Newer')).dy));
+      // Music takes the hero spot, the show sits beside it.
+      expect(tester.getTopLeft(find.text('Song')).dx, lessThan(tester.getTopLeft(find.text('Newer')).dx));
 
       // Stopped now, so it is the newest thing: last played on top, the newer show under it.
       await send(tester, {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'playing': false});
@@ -169,7 +170,7 @@ void main() {
       expect(find.byType(WatchCard), findsNothing);
     });
 
-    testWidgets('shows song progress only while playing and the length is known', (tester) async {
+    testWidgets('song progress shows while playing and holds under PAUSED', (tester) async {
       final song = {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'artist': 'Band', 'playing': true};
       await pump(tester);
       await send(tester, song);
@@ -185,12 +186,14 @@ void main() {
       expect(find.byType(TrackProgressBar), findsOneWidget);
       expect(find.text('3:45'), findsOneWidget);
 
+      // Paused: the bar stays where it stopped, under PAUSED, for 15 minutes.
       await send(tester, {...song, 'playing': false});
-      expect(find.byType(TrackProgressBar), findsNothing);
+      expect(find.text('PAUSED'), findsOneWidget);
+      expect(find.byType(TrackProgressBar), findsOneWidget);
     });
   });
 
-  testWidgets('two stacked cards: Down moves to the second, OK picks it, Down again leaves', (tester) async {
+  testWidgets('hero and side card: Right moves to the second, OK picks it, Down leaves', (tester) async {
     final at = DateTime(2026, 11, 17, 21).millisecondsSinceEpoch;
     final first = SlotWatch(program(id: 1, title: 'First', at: at));
     final second = SlotWatch(program(id: 2, title: 'Second', at: at));
@@ -202,22 +205,79 @@ void main() {
         body: HomeSlot(entries: [first, second], focusNode: node, onSelect: selected.add, onDown: () => downs++),
       ),
     ));
-    expect(find.byType(WatchCard), findsNWidgets(2));
+    expect(find.byType(HeroCard), findsOneWidget);
+    expect(find.byType(WatchCard), findsOneWidget);
     node.requestFocus();
     await tester.pump();
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     expect(selected, [second]);
-    expect(downs, 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(selected, [second, first]);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     expect(downs, 1);
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    expect(selected, [second, first]);
     node.dispose();
+  });
+
+  testWidgets('a playing song shows its controls only when focused, and OK presses them', (tester) async {
+    final track = SlotTrack(const Track(packageName: 'com.spotify.tv.android', title: 'Song', artist: 'Band'),
+        playing: true,
+        progress: TrackProgress(duration: const Duration(minutes: 4), position: Duration.zero, positionAt: DateTime.now()));
+    final show = SlotWatch(program(id: 2, title: 'Show', at: DateTime(2026, 11, 17).millisecondsSinceEpoch));
+    final node = FocusNode();
+    final pressed = <String>[];
+    final opened = <SlotEntry>[];
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: HomeSlot(entries: [track, show], focusNode: node, onControl: pressed.add, onSelect: opened.add),
+      ),
+    ));
+    expect(find.byType(PlayerControls), findsNothing);
+
+    node.requestFocus();
+    await tester.pump();
+    expect(find.byType(PlayerControls), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // starts on play / pause
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(pressed, ['pause', 'next', 'previous']);
+    expect(opened, isEmpty);
+
+    // Past next, Right goes on to the show beside it.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(opened, [show]);
+
+    node.unfocus();
+    await tester.pump();
+    expect(find.byType(PlayerControls), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    node.dispose();
+  });
+
+  testWidgets('art arriving after the title fades in without errors', (tester) async {
+    Widget hero(Uint8List? art) => MaterialApp(
+          home: Scaffold(
+            body: HeroCard.track(
+                track: Track(packageName: 'p', title: 'Song', art: art), playing: true, focused: false),
+          ),
+        );
+    await tester.pumpWidget(hero(null));
+    await tester.pumpWidget(hero(Uint8List.fromList(kTransparentImage)));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(tester.takeException(), isNull);
+    await tester.pumpAndSettle();
+    expect(find.byType(Image), findsOneWidget);
   });
 
   testWidgets('TrackProgressBar shows elapsed and total time and ticks forward', (tester) async {

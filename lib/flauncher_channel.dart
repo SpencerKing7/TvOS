@@ -326,6 +326,10 @@ class FLauncherChannel {
   /// What any app is playing, as maps; an empty map when nothing has a media session.
   Stream<dynamic> nowPlayingEvents() => _nowPlayingEventChannel.receiveBroadcastStream();
 
+  /// Plays, pauses or skips the media session on screen: `play`, `pause`, `next` or `previous`.
+  Future<bool> nowPlayingControl(String action) async =>
+      await _methodChannel.invokeMethod<bool>('nowPlayingControl', {'action': action}) ?? false;
+
   StreamSubscription<dynamic> addWatchNextChangedListener(void Function(dynamic) onEvent) =>
       _watchNextEventChannel.receiveBroadcastStream().listen(onEvent);
 }

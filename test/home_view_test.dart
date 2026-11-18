@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flauncher/models/app.dart';
 import 'package:flauncher/models/watch_next_program.dart';
 import 'package:flauncher/providers/apps_service.dart';
@@ -75,7 +77,7 @@ void main() {
           }));
 
       expect(tester.takeException(), isNull);
-      expect(find.byType(NowPlayingHero), findsOneWidget);
+      expect(find.byType(HeroCard), findsOneWidget);
     });
   }
 
@@ -115,7 +117,7 @@ void main() {
       expect(focused(), 'home slot');
     });
 
-    testWidgets('shows only pinned apps, and Down then OK continues the second show', (tester) async {
+    testWidgets('shows only pinned apps, and Right then OK continues the second show', (tester) async {
       WatchNextProgram from(int id, String title, String package, int hour) => WatchNextProgram(
             id: id,
             packageName: package,
@@ -140,12 +142,50 @@ void main() {
 
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
       await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await tester.pump();
       expect(focused(), 'home slot');
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pump();
       verify(watch.launch(older)).called(1);
+    });
+
+    testWidgets('play and pause swap the cards once, with nothing moving after', (tester) async {
+      final music = StreamController<dynamic>.broadcast();
+      addTearDown(music.close);
+      // Watched long before the song, so the paused song keeps the big spot.
+      final earlier = WatchNextProgram(
+        id: 8,
+        packageName: 'com.netflix.ninja',
+        title: 'Earlier',
+        description: '',
+        watchNextType: 0,
+        lastEngagementTime: DateTime(2020).millisecondsSinceEpoch,
+        playbackPosition: 1,
+        duration: 2,
+        intentUri: 'intent://earlier',
+        posterArtUri: '',
+      );
+      await _pumpHome(tester, pixelRatio: 1.5, watching: [earlier], nowPlaying: music.stream);
+      final song = {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'artist': 'Band'};
+      await tester.runAsync(() async {
+        music.add({...song, 'playing': true});
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      });
+      await tester.pumpAndSettle();
+
+      for (final playing in [false, true, false, true]) {
+        await tester.runAsync(() async {
+          music.add({...song, 'playing': playing});
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        });
+        await tester.pump(const Duration(milliseconds: 50));
+        final early = tester.getTopLeft(find.byType(SlotDivider));
+        // The song's card stays the same card: no second copy fading in or out.
+        expect(find.byType(HeroCard), findsOneWidget, reason: 'the hero crossfaded on playing=$playing');
+        await tester.pump(const Duration(milliseconds: 800));
+        expect(tester.getTopLeft(find.byType(SlotDivider)), early, reason: 'the cards moved after switching to playing=$playing');
+      }
     });
 
     testWidgets('with nothing in it, Up goes to the menu as before', (tester) async {

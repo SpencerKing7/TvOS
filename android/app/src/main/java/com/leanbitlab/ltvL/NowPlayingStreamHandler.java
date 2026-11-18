@@ -55,7 +55,9 @@ class NowPlayingStreamHandler implements EventChannel.StreamHandler {
     private final List<MediaController> controllers = new ArrayList<>();
     private final Map<MediaController, MediaController.Callback> callbacks = new HashMap<>();
 
+    private MediaController shown;
     private String lastTrackKey;
+    private String lastArtSource;
     private byte[] lastArt;
     private String lastSentKey;
     private int generation = 0;
@@ -143,6 +145,7 @@ class NowPlayingStreamHandler implements EventChannel.StreamHandler {
         }
         callbacks.clear();
         controllers.clear();
+        shown = null;
     }
 
     private static boolean isPlaying(PlaybackState state) {
@@ -179,9 +182,30 @@ class NowPlayingStreamHandler implements EventChannel.StreamHandler {
         return value == null ? "" : value.toString().trim();
     }
 
+    /**
+     * Sends play, pause, next or previous to the session on screen (or, between events, the one
+     * that would be picked). Returns whether there was a session to send it to.
+     */
+    boolean control(String action) {
+        MediaController controller = shown != null ? shown : pick();
+        if (controller == null || action == null) return false;
+        MediaController.TransportControls controls = controller.getTransportControls();
+        switch (action) {
+            case "play" -> controls.play();
+            case "pause" -> controls.pause();
+            case "next" -> controls.skipToNext();
+            case "previous" -> controls.skipToPrevious();
+            default -> {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private void publish() {
         if (sink == null) return;
         MediaController controller = pick();
+        shown = controller;
         if (controller == null) {
             send("none", new HashMap<>());
             return;
@@ -217,18 +241,41 @@ class NowPlayingStreamHandler implements EventChannel.StreamHandler {
 
         String trackKey = packageName + "\n" + title + "\n" + artist + "\n" + album;
         String sendKey = trackKey + "\n" + playing + "\n" + duration + "\n" + positionKey;
-        if (trackKey.equals(lastTrackKey)) {
+        final Bitmap bitmap = artBitmap(metadata);
+        final String artUri = bitmap == null ? artUri(metadata) : null;
+        // A source already tried for this song and failed isn't fetched again on every event.
+        String artSource = trackKey + "|" + (bitmap != null ? "bitmap@" + bitmap.getGenerationId() : artUri);
+        boolean artToLoad = (bitmap != null || artUri != null) && !artSource.equals(lastArtSource);
+        // Same song with its art already in hand, or none offered yet: send at once. Apps often
+        // send the title first and the art a moment later, so a song still without art loads
+        // it as soon as it turns up instead of keeping the empty first answer.
+        if (trackKey.equals(lastTrackKey) && (lastArt != null || !artToLoad)) {
             if (lastArt != null) event.put("art", lastArt);
             send(sendKey, event);
             return;
         }
+        if (!trackKey.equals(lastTrackKey) && !artToLoad) {
+            // A new song with no art yet: show its words now; the art follows when it arrives.
+            generation++;
+            lastTrackKey = trackKey;
+            lastArt = null;
+            send(sendKey, event);
+            return;
+        }
 
-        // A new track: encode its art off the main thread, then send. A newer event wins.
+        // Art to load: a new song's words go out now, and the art follows from a background
+        // thread. A newer event wins.
         final int mine = ++generation;
-        final Bitmap bitmap = artBitmap(metadata);
-        final String artUri = bitmap == null ? artUri(metadata) : null;
+        lastArtSource = artSource;
+        if (!trackKey.equals(lastTrackKey)) {
+            lastTrackKey = trackKey;
+            lastArt = null;
+            send(sendKey, new HashMap<>(event));
+        }
         artExecutor.execute(() -> {
-            byte[] art = ArtLoader.encode(bitmap != null ? bitmap : ArtLoader.decodeUri(context, artUri), ART_MAX_PX);
+            Bitmap loaded = bitmap != null ? bitmap : ArtLoader.decodeUri(context, artUri);
+            if (loaded == null) loaded = ArtLoader.decodeWeb(artUri);
+            byte[] art = ArtLoader.encode(loaded, ART_MAX_PX);
             main.post(() -> {
                 if (mine != generation) return;
                 lastTrackKey = trackKey;
@@ -239,12 +286,15 @@ class NowPlayingStreamHandler implements EventChannel.StreamHandler {
         });
     }
 
-    private void send(String key, Map<String, Object> event) {
+    private void send(String baseKey, Map<String, Object> event) {
+        // Art arriving later for the same song must still go out.
+        String key = baseKey + (event.containsKey("art") ? "\nart" : "");
         if (sink == null || Objects.equals(key, lastSentKey)) return;
         if (event.isEmpty()) {
             generation++;
             lastTrackKey = null;
             lastArt = null;
+            lastArtSource = null;
         }
         lastSentKey = key;
         try {
