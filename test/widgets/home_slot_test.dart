@@ -193,16 +193,18 @@ void main() {
     });
   });
 
-  testWidgets('hero and side card: Right moves to the second, OK picks it, Down leaves', (tester) async {
+  testWidgets('hero and side card: Right moves to the second, OK picks it, Down and Up leave', (tester) async {
     final at = DateTime(2026, 11, 17, 21).millisecondsSinceEpoch;
     final first = SlotWatch(program(id: 1, title: 'First', at: at));
     final second = SlotWatch(program(id: 2, title: 'Second', at: at));
     final node = FocusNode();
     final selected = <SlotEntry>[];
     var downs = 0;
+    var ups = 0;
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
-        body: HomeSlot(entries: [first, second], focusNode: node, onSelect: selected.add, onDown: () => downs++),
+        body: HomeSlot(
+            entries: [first, second], focusNode: node, onSelect: selected.add, onDown: (_) => downs++, onUp: () => ups++),
       ),
     ));
     expect(find.byType(HeroCard), findsOneWidget);
@@ -220,10 +222,12 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     expect(downs, 1);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    expect(ups, 1);
     node.dispose();
   });
 
-  testWidgets('a playing song shows its controls only when focused, and OK presses them', (tester) async {
+  testWidgets('a playing song: card, then its controls, then the show, in one row', (tester) async {
     final track = SlotTrack(const Track(packageName: 'com.spotify.tv.android', title: 'Song', artist: 'Band'),
         playing: true,
         progress: TrackProgress(duration: const Duration(minutes: 4), position: Duration.zero, positionAt: DateTime.now()));
@@ -242,21 +246,34 @@ void main() {
     await tester.pump();
     expect(find.byType(PlayerControls), findsOneWidget);
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // starts on play / pause
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    // The row starts on the song's card: OK opens the app.
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    expect(pressed, ['pause', 'next', 'previous']);
-    expect(opened, isEmpty);
+    expect(opened, [track]);
 
-    // Past next, Right goes on to the show beside it.
+    // Then card → previous → play/pause → next.
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(pressed, ['previous', 'pause', 'next']);
+
+    // Past next, Right goes on to the show; past the show, nowhere.
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    expect(opened, [show]);
+    expect(opened, [track, show]);
+
+    // Left from the show lands on next, and on back to the card.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(pressed.last, 'next');
+    for (var i = 0; i < 3; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(opened, [track, show, track]);
 
     node.unfocus();
     await tester.pump();
