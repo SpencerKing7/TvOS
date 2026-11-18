@@ -20,12 +20,16 @@ bool get videoLoopsAvailable => videoClips.isNotEmpty;
 const _pexelsFiles = 'https://videos.pexels.com/video-files';
 
 /// A Pexels clip at 1080p and 60 fps (Pexels licence: free to use, no credit required) and
-/// the speed it plays at.
+/// its length in seconds (ffprobe). Most Pexels files are fragmented MP4s with no index, so
+/// the player can't tell how long they are (or seek in them): without this it never sees
+/// the end coming, and the last frame sits frozen until the safety timer moves on.
 class VideoClip {
   final String file;
-  final double speed;
+  final double seconds;
 
-  const VideoClip(this.file, [this.speed = 1.0]);
+  const VideoClip(this.file, this.seconds);
+
+  Duration get length => Duration(milliseconds: (seconds * 1000).round());
 
   String get name => file.split('/').last;
 }
@@ -39,39 +43,39 @@ class VideoClip {
 /// forest, light) so similar scenes never follow each other, wrap-around included; every
 /// clip shows once before any repeats.
 const videoClips = [
-  VideoClip('36758608/15578481_1920_1080_60fps.mp4'), // water: channels and islands at sunset
-  VideoClip('33197843/14148120_1920_1080_60fps.mp4'), // mountains: Fitz Roy over glacial lakes
-  VideoClip('28879134/12502452_1920_1080_60fps.mp4'), // desert: Monument Valley buttes at dawn
-  VideoClip('19460532/19460532-hd_1920_1080_60fps.mp4'), // clouds: a sea of cloud over the land
-  VideoClip('33330010/14192475_1920_1080_60fps.mp4'), // water: a turquoise fjord between cliffs
-  VideoClip('31332724/13373828_1920_1080_60fps.mp4'), // light: sun rays over hazy ranges
-  VideoClip('29415859/12666746_1920_1080_60fps.mp4'), // mountains: snowfields under a blue sky
-  VideoClip('18757530/18757530-hd_1920_1080_60fps.mp4'), // forest: pine-covered mountainsides
-  VideoClip('34493786/14615403_1920_1080_60fps.mp4'), // desert: Wilson Arch near Moab, Utah
-  VideoClip('38361089/16290220_1920_1080_60fps.mp4'), // water: islands in a mountain lake
-  VideoClip('30791936/13170365_1920_1080_60fps.mp4'), // desert: white sand dunes
-  VideoClip('34505194/14619922_1920_1080_60fps.mp4'), // mountains: snowy ridges above a cloud sea
-  VideoClip('14862547/14862547-hd_1920_1080_60fps.mp4'), // clouds: cloud flowing through peaks
-  VideoClip('29477418/12689287_1920_1080_60fps.mp4'), // water: ice on a black-sand shore at sunset
-  VideoClip('38520557/16358890_1920_1080_60fps.mp4'), // light: the sun over a golden cloud valley
-  VideoClip('38903112/16542886_1920_1080_60fps.mp4'), // forest: woodland at sunrise
-  VideoClip('28811521/12483473_1920_1080_60fps.mp4'), // water: a windswept lake below cliffs
-  VideoClip('37943267/16100580_1920_1080_60fps.mp4'), // desert: a lone cone on a salt flat
-  VideoClip('36432324/15448230_1920_1080_60fps.mp4'), // light: sunset over snowy Utah canyon country
-  VideoClip('34293610/14530597_1920_1080_60fps.mp4'), // mountains: a green valley below snowy peaks
-  VideoClip('30700901/13135908_1920_1080_60fps.mp4'), // clouds: cloud spilling over a ridge at dusk
-  VideoClip('16461789/16461789-hd_1920_1080_60fps.mp4'), // water: sun setting over a lake
-  VideoClip('28647791/12442287_1920_1080_60fps.mp4'), // light: mist over a river plain at dawn
-  VideoClip('35742725/15150739_1920_1080_60fps.mp4'), // water: a river through striped sandstone, Utah
-  VideoClip('30859401/13196587_1920_1080_60fps.mp4'), // mountains: a snow-dusted summit
-  VideoClip('38688892/16434219_1920_1080_60fps.mp4'), // forest: a forested limestone peak
-  VideoClip('35410029/15003059_1920_1080_60fps.mp4'), // water: a braided river below snowy peaks
-  VideoClip('36143048/15327633_1920_1080_60fps.mp4'), // clouds: cloud on the Wasatch, Utah
-  VideoClip('36460250/15460732_1920_1080_60fps.mp4'), // desert: red cliffs under a blue sky
-  VideoClip('31985994/13630845_1920_1080_60fps.mp4'), // clouds: the sun above a cloud sea
-  VideoClip('29057836/12560425_1920_1080_60fps.mp4'), // water: mist on a still lake at sunrise
-  VideoClip('33285408/14178165_1920_1080_60fps.mp4'), // mountains: Fitz Roy above a frozen lake
-  VideoClip('17374934/17374934-hd_1920_1080_60fps.mp4'), // light: sunset clouds over a lake
+  VideoClip('36758608/15578481_1920_1080_60fps.mp4', 45.8), // water: channels and islands at sunset
+  VideoClip('33197843/14148120_1920_1080_60fps.mp4', 30.1), // mountains: Fitz Roy over glacial lakes
+  VideoClip('28879134/12502452_1920_1080_60fps.mp4', 30.5), // desert: Monument Valley buttes at dawn
+  VideoClip('19460532/19460532-hd_1920_1080_60fps.mp4', 87.6), // clouds: a sea of cloud over the land
+  VideoClip('33330010/14192475_1920_1080_60fps.mp4', 38.2), // water: a turquoise fjord between cliffs
+  VideoClip('31332724/13373828_1920_1080_60fps.mp4', 34.2), // light: sun rays over hazy ranges
+  VideoClip('29415859/12666746_1920_1080_60fps.mp4', 31.3), // mountains: snowfields under a blue sky
+  VideoClip('18757530/18757530-hd_1920_1080_60fps.mp4', 88.0), // forest: pine-covered mountainsides
+  VideoClip('34493786/14615403_1920_1080_60fps.mp4', 22.0), // desert: Wilson Arch near Moab, Utah
+  VideoClip('38361089/16290220_1920_1080_60fps.mp4', 38.0), // water: islands in a mountain lake
+  VideoClip('30791936/13170365_1920_1080_60fps.mp4', 37.8), // desert: white sand dunes
+  VideoClip('34505194/14619922_1920_1080_60fps.mp4', 26.6), // mountains: snowy ridges above a cloud sea
+  VideoClip('14862547/14862547-hd_1920_1080_60fps.mp4', 53.2), // clouds: cloud flowing through peaks
+  VideoClip('29477418/12689287_1920_1080_60fps.mp4', 45.5), // water: ice on a black-sand shore at sunset
+  VideoClip('38520557/16358890_1920_1080_60fps.mp4', 46.8), // light: the sun over a golden cloud valley
+  VideoClip('38903112/16542886_1920_1080_60fps.mp4', 35.7), // forest: woodland at sunrise
+  VideoClip('28811521/12483473_1920_1080_60fps.mp4', 28.0), // water: a windswept lake below cliffs
+  VideoClip('37943267/16100580_1920_1080_60fps.mp4', 26.9), // desert: a lone cone on a salt flat
+  VideoClip('36432324/15448230_1920_1080_60fps.mp4', 24.8), // light: sunset over snowy Utah canyon country
+  VideoClip('34293610/14530597_1920_1080_60fps.mp4', 43.7), // mountains: a green valley below snowy peaks
+  VideoClip('30700901/13135908_1920_1080_60fps.mp4', 40.0), // clouds: cloud spilling over a ridge at dusk
+  VideoClip('16461789/16461789-hd_1920_1080_60fps.mp4', 32.8), // water: sun setting over a lake
+  VideoClip('28647791/12442287_1920_1080_60fps.mp4', 48.7), // light: mist over a river plain at dawn
+  VideoClip('35742725/15150739_1920_1080_60fps.mp4', 13.6), // water: a river through striped sandstone, Utah
+  VideoClip('30859401/13196587_1920_1080_60fps.mp4', 30.1), // mountains: a snow-dusted summit
+  VideoClip('38688892/16434219_1920_1080_60fps.mp4', 53.0), // forest: a forested limestone peak
+  VideoClip('35410029/15003059_1920_1080_60fps.mp4', 31.5), // water: a braided river below snowy peaks
+  VideoClip('36143048/15327633_1920_1080_60fps.mp4', 23.9), // clouds: cloud on the Wasatch, Utah
+  VideoClip('36460250/15460732_1920_1080_60fps.mp4', 34.3), // desert: red cliffs under a blue sky
+  VideoClip('31985994/13630845_1920_1080_60fps.mp4', 30.0), // clouds: the sun above a cloud sea
+  VideoClip('29057836/12560425_1920_1080_60fps.mp4', 25.6), // water: mist on a still lake at sunrise
+  VideoClip('33285408/14178165_1920_1080_60fps.mp4', 30.4), // mountains: Fitz Roy above a frozen lake
+  VideoClip('17374934/17374934-hd_1920_1080_60fps.mp4', 37.2), // light: sunset clouds over a lake
 ];
 
 /// True once a clip is on screen, so the background can stop drawing what it covers.
@@ -102,6 +106,9 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
   bool _fading = false;
   Timer? _fallback;
 
+  // The player position can't be trusted (see [_played]), so clips are timed on a clock.
+  Timer? _ticker;
+
   @override
   void initState() {
     super.initState();
@@ -109,13 +116,14 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
     // Start somewhere different each time, then always continue in order.
     _index = DateTime.now().millisecondsSinceEpoch % videoClips.length;
     _start(_index);
+    _ticker = Timer.periodic(const Duration(milliseconds: 250), (_) => _onTick());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _fallback?.cancel();
-    _current?.removeListener(_onTick);
+    _ticker?.cancel();
     _current?.dispose();
     _incoming?.dispose();
     videoShowing.value = false;
@@ -127,8 +135,10 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
     // Decoding video while an app is in front would cost the TV for nothing.
     if (state == AppLifecycleState.resumed) {
       _current?.play();
+      if (_current != null) _played.start();
     } else {
       _current?.pause();
+      _played.stop();
     }
   }
 
@@ -140,15 +150,21 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
   /// Where in its footage the current clip started (long clips start somewhere random).
   Duration _startedAt = Duration.zero;
 
-  /// Real time left for the current clip, or null while its length is unknown (some
-  /// Pexels files report 0 at first; never judge "nearly over" from that).
+  /// Whether the player knows clip [i]'s real length, and so can seek in it. Fragmented
+  /// files report only their first fragment (a few seconds) and can't seek.
+  static bool _seekable(VideoPlayerController controller, int i) =>
+      (controller.value.duration - videoClips[i].length).abs() < const Duration(seconds: 1);
+
+  /// How long the current clip has been on screen and playing. The player's own position
+  /// can't be trusted: in a fragmented file it stops at the end of the first fragment while
+  /// the picture plays on.
+  Stopwatch _played = Stopwatch();
+
+  /// Time left for the current clip.
   Duration? _remaining() {
-    final value = _current?.value;
-    if (value == null || value.duration < const Duration(seconds: 3)) return null;
-    if (value.position < _startedAt + const Duration(seconds: 1)) return null;
-    final speed = videoClips[_index].speed;
-    final footageLeft = (value.duration - value.position) * (1 / speed);
-    final windowLeft = _showFor - (value.position - _startedAt) * (1 / speed);
+    if (_current == null) return null;
+    final footageLeft = videoClips[_index].length - _startedAt - _played.elapsed;
+    final windowLeft = _showFor - _played.elapsed;
     return footageLeft < windowLeft ? footageLeft : windowLeft;
   }
 
@@ -156,15 +172,16 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
     final remaining = _remaining();
     if (remaining == null || !_onScreen) return;
     if (!_preparing && remaining <= _prepareAhead + _crossfade) _prepareNext();
-    if (!_fading && _incoming != null && (remaining <= _crossfade || _current!.value.isCompleted)) _crossfadeIn();
+    if (!_fading && _incoming != null && remaining <= _crossfade) _crossfadeIn();
   }
 
   /// First clip: open it and show it straight away.
   Future<void> _start(int index) async {
     final (controller, i) = await _open(index);
     if (controller == null || !mounted) return controller?.dispose();
+    final from = controller.value.position;
     await controller.play();
-    _show(controller, i);
+    _show(controller, i, from, Stopwatch()..start());
     setState(() => _current = controller);
     videoShowing.value = true;
   }
@@ -190,6 +207,9 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
     final next = _incoming;
     if (next == null || _fading) return;
     _fading = true;
+    // Timed from here: by the time the fade ends, a fragmented file's position may be stuck.
+    final from = next.value.position;
+    final clock = Stopwatch()..start();
     await next.play();
     // Don't start fading until the new clip is really producing pictures; a clip that
     // was opened partway in can take a moment, and fading in before then blends in a
@@ -201,8 +221,7 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
     if (!mounted) return;
 
     final old = _current;
-    old?.removeListener(_onTick);
-    _show(next, _incomingIndex);
+    _show(next, _incomingIndex, from, clock);
     setState(() {
       _current = next;
       _incoming = null;
@@ -226,14 +245,15 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
   }
 
   /// Bookkeeping when [controller] becomes the clip on screen.
-  void _show(VideoPlayerController controller, int i) {
+  void _show(VideoPlayerController controller, int i, Duration from, Stopwatch clock) {
     _index = i;
-    _startedAt = controller.value.position;
-    controller.addListener(_onTick);
-    debugPrint('Video: playing ${videoClips[i].name} at ${videoClips[i].speed}x from ${_startedAt.inSeconds}s');
-    // Files that never report a length still move on, shortly after their window.
+    _startedAt = from;
+    _played = clock;
+    debugPrint('Video: playing ${videoClips[i].name} from ${_startedAt.inSeconds}s');
+    // Whatever happens to the player, the rotation moves on shortly after this clip should.
+    final left = videoClips[i].length - _startedAt - clock.elapsed;
     _fallback?.cancel();
-    _fallback = Timer(_showFor + const Duration(seconds: 10), _forceNext);
+    _fallback = Timer((left < _showFor ? left : _showFor) + const Duration(seconds: 3), _forceNext);
     // Make sure the next clip is downloaded, then quietly fetch the rest.
     _fetch(videoClips[(i + 1) % videoClips.length]).then((_) => _fetchAllOnce());
   }
@@ -250,8 +270,8 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
     }
   }
 
-  /// Opens clip [index] (or the next one that can be fetched and opened), muted and at
-  /// its speed, paused on its first frame.
+  /// Opens clip [index] (or the next one that can be fetched and opened), muted, paused on
+  /// its first frame.
   Future<(VideoPlayerController?, int)> _open(int index) async {
     for (var attempt = 0; attempt < videoClips.length; attempt++) {
       final i = (index + attempt) % videoClips.length;
@@ -262,11 +282,10 @@ class _VideoLoopsState extends State<VideoLoops> with WidgetsBindingObserver {
       try {
         await controller.initialize();
         await controller.setVolume(0);
-        await controller.setPlaybackSpeed(videoClips[i].speed);
-        // Long clips show a different stretch each time, not always the opening.
-        final needed = _showFor * videoClips[i].speed + const Duration(seconds: 4);
-        final spare = controller.value.duration - needed;
-        if (spare > const Duration(seconds: 2)) {
+        // Long clips show a different stretch each time, not always the opening (only where
+        // the file lets the player seek; the rest always start at the top).
+        final spare = videoClips[i].length - _showFor - const Duration(seconds: 4);
+        if (spare > const Duration(seconds: 2) && _seekable(controller, i)) {
           await controller.seekTo(spare * Random().nextDouble());
         }
         return (controller, i);
@@ -351,9 +370,11 @@ final Map<String, Future<File?>> _inFlight = {};
 /// The clip's file on the TV, downloading it from Pexels the first time.
 // The cleanup block must not return the removed future: whenComplete waits on any
 // future its callback returns, and this one is itself, so it would never complete.
-Future<File?> _fetch(VideoClip clip) => _inFlight.putIfAbsent(clip.file, () => _download(clip).whenComplete(() {
-      _inFlight.remove(clip.file);
-    }));
+Future<File?> _fetch(VideoClip clip) => _inFlight.putIfAbsent(
+    clip.file,
+    () => _download(clip).whenComplete(() {
+          _inFlight.remove(clip.file);
+        }));
 
 Future<File?> _download(VideoClip clip) async {
   final dir = Directory('${(await getApplicationSupportDirectory()).path}/videos');
@@ -363,8 +384,9 @@ Future<File?> _download(VideoClip clip) async {
 
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
   try {
-    final response =
-        await (await client.getUrl(Uri.parse('$_pexelsFiles/${clip.file}'))).close().timeout(const Duration(seconds: 30));
+    final response = await (await client.getUrl(Uri.parse('$_pexelsFiles/${clip.file}')))
+        .close()
+        .timeout(const Duration(seconds: 30));
     if (response.statusCode != 200) {
       debugPrint('Video ${clip.name}: HTTP ${response.statusCode}');
       return null;

@@ -169,7 +169,8 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
               type: MaterialType.transparency,
               child: Text(
                 '${landscape.place}  ·  ${landscape.author}',
-                style: const TextStyle(color: Colors.white38, fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.4),
+                style: const TextStyle(
+                    color: Colors.white38, fontSize: 14, fontWeight: FontWeight.w500, letterSpacing: 0.4),
               ),
             ),
           ),
@@ -331,12 +332,7 @@ class _AmbientPainter extends CustomPainter {
         size.width * (cx + 0.18 * sin(angle)),
         size.height * (cy + 0.10 * cos(angle * 0.8)),
       );
-      final radius = size.width * 0.55;
-      canvas.drawCircle(
-        center,
-        radius,
-        Paint()..shader = ui.Gradient.radial(center, radius, [color.withOpacity(0.55), color.withOpacity(0)]),
-      );
+      _paintSprite(canvas, _Sprite.field, center, size.width * 0.55, color.withOpacity(0.55));
     }
   }
 
@@ -345,39 +341,16 @@ class _AmbientPainter extends CustomPainter {
   void _paintOverlays(Canvas canvas, Size size, {required bool darker}) {
     final rect = Offset.zero & size;
 
-    // Keep everything behind the app rows quiet: fade to dark from just above them.
-    // Photos have more detail than the gradient, so they get a heavier wash.
-    canvas.drawRect(
+    // The still wash (dark behind the app rows, and behind the clock over photos and video),
+    // drawn once into a small image and stretched: smooth gradients lose nothing at a
+    // quarter of the size, and stretching an image is far cheaper here than filling them.
+    final wash = _wash(size, darker);
+    canvas.drawImageRect(
+      wash,
+      Rect.fromLTWH(0, 0, wash.width.toDouble(), wash.height.toDouble()),
       rect,
-      Paint()
-        ..shader = ui.Gradient.linear(
-          Offset(0, size.height * 0.30),
-          Offset(0, size.height),
-          [
-            Colors.black.withOpacity(0),
-            Colors.black.withOpacity(darker ? 0.6 : 0.45),
-            Colors.black.withOpacity(darker ? 0.75 : 0.62),
-          ],
-          [0, 0.45, 1],
-        ),
+      Paint()..filterQuality = FilterQuality.low,
     );
-
-    // Photos and video can have bright sky right where the time and weather sit; a soft
-    // dark pool behind that corner keeps them readable without a visible box.
-    if (darker) {
-      final corner = Offset(size.width * 0.18, size.height * 0.16);
-      final radius = size.width * 0.42;
-      canvas.drawRect(
-        rect,
-        Paint()
-          ..shader = ui.Gradient.radial(
-            corner,
-            radius,
-            [Colors.black.withOpacity(0.5), Colors.black.withOpacity(0.25), Colors.black.withOpacity(0)],
-            [0, 0.5, 1],
-          ),
-      );
-    }
 
     // In All Apps the grid fills the screen, so dim the whole thing.
     if (allApps > 0) {
@@ -389,25 +362,109 @@ class _AmbientPainter extends CustomPainter {
     // Not over photos: tinting a landscape muddies it.
     final center = glowCenter;
     if (!darker && glow.alpha > 0 && center != null && standby < 1) {
-      final radius = size.width * 0.38;
-      canvas.drawCircle(
-        center,
-        radius,
-        Paint()
-          ..shader = ui.Gradient.radial(
-            center,
-            radius,
-            [glow.withOpacity(0.42 * glow.opacity * (1 - standby)), glow.withOpacity(0.16 * glow.opacity * (1 - standby)), glow.withOpacity(0)],
-            [0, 0.45, 1],
-          ),
-      );
+      _paintSprite(
+          canvas, _Sprite.glow, center, size.width * 0.38, glow.withOpacity(0.42 * glow.opacity * (1 - standby)));
     }
+  }
+
+  /// A soft round [sprite] of [color] centred on [center].
+  void _paintSprite(Canvas canvas, ui.Image sprite, Offset center, double radius, Color color) {
+    if (color.alpha == 0) return;
+    canvas.drawImageRect(
+      sprite,
+      Rect.fromLTWH(0, 0, sprite.width.toDouble(), sprite.height.toDouble()),
+      Rect.fromCircle(center: center, radius: radius),
+      Paint()
+        ..filterQuality = FilterQuality.low
+        ..colorFilter = ColorFilter.mode(color, BlendMode.modulate),
+    );
   }
 
   // Slides change in place (same object, new photo), so a new painter always repaints;
   // the ticking clock repaints between those.
   @override
   bool shouldRepaint(_AmbientPainter old) => true;
+}
+
+// Filling a full-screen gradient costs this TV's GPU several milliseconds every frame
+// (two of them over the video took ~15 ms, holding Home near 40 fps); sampling an image
+// costs almost nothing. So every gradient is drawn once, small, and stretched.
+
+/// The wash shared by every background, per screen size and darkness.
+final Map<(Size, bool), ui.Image> _washes = {};
+
+ui.Image _wash(Size size, bool darker) => _washes[(size, darker)] ??= _bake(
+      size * 0.25,
+      (canvas, small) {
+        canvas.scale(0.25);
+        _paintWash(canvas, size, darker);
+      },
+    );
+
+void _paintWash(Canvas canvas, Size size, bool darker) {
+  final rect = Offset.zero & size;
+  // Keep everything behind the app rows quiet: fade to dark from just above them.
+  // Photos have more detail than the gradient, so they get a heavier wash.
+  canvas.drawRect(
+    rect,
+    Paint()
+      ..shader = ui.Gradient.linear(
+        Offset(0, size.height * 0.30),
+        Offset(0, size.height),
+        [
+          Colors.black.withOpacity(0),
+          Colors.black.withOpacity(darker ? 0.6 : 0.45),
+          Colors.black.withOpacity(darker ? 0.75 : 0.62),
+        ],
+        [0, 0.45, 1],
+      ),
+  );
+  // Photos and video can have bright sky right where the time and weather sit; a soft
+  // dark pool behind that corner keeps them readable without a visible box.
+  if (darker) {
+    final corner = Offset(size.width * 0.18, size.height * 0.16);
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = ui.Gradient.radial(
+          corner,
+          size.width * 0.42,
+          [Colors.black.withOpacity(0.5), Colors.black.withOpacity(0.25), Colors.black.withOpacity(0)],
+          [0, 0.5, 1],
+        ),
+    );
+  }
+}
+
+/// Soft white discs, tinted when drawn: a colour field fading evenly to nothing, and the
+/// focus glow, which holds a little longer before it fades.
+abstract final class _Sprite {
+  static final ui.Image field = _disc(const [1, 0], const [0, 1]);
+  static final ui.Image glow = _disc(const [1, 0.16 / 0.42, 0], const [0, 0.45, 1]);
+
+  static ui.Image _disc(List<double> alphas, List<double> stops) => _bake(const Size(128, 128), (canvas, size) {
+        final center = size.center(Offset.zero);
+        canvas.drawCircle(
+          center,
+          size.width / 2,
+          Paint()
+            ..shader = ui.Gradient.radial(
+              center,
+              size.width / 2,
+              [for (final a in alphas) Colors.white.withOpacity(a)],
+              stops,
+            ),
+        );
+      });
+}
+
+ui.Image _bake(Size size, void Function(Canvas canvas, Size size) paint) {
+  final recorder = ui.PictureRecorder();
+  paint(Canvas(recorder), size);
+  final picture = recorder.endRecording();
+  final image = picture.toImageSync(size.width.ceil(), size.height.ceil());
+  picture.dispose();
+  return image;
 }
 
 /// Colours for the time of day, blended smoothly between the keyframes below.

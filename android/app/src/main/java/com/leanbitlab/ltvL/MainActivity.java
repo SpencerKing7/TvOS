@@ -55,6 +55,7 @@ import android.app.AppOpsManager;
 import android.os.RemoteException;
 
 import io.flutter.embedding.android.FlutterActivity;
+import io.flutter.embedding.android.RenderMode;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
@@ -77,6 +78,15 @@ import android.service.notification.StatusBarNotification;
 import android.content.ComponentName;
 
 public class MainActivity extends FlutterActivity {
+    // Flutter draws into the window itself rather than a SurfaceView under it. This TV's
+    // compositor can't take two full-screen layers in hardware, so with a SurfaceView it
+    // blended both on the GPU at 4K (24-46 ms a frame), holding Home near 40 fps.
+    @androidx.annotation.NonNull
+    @Override
+    public RenderMode getRenderMode() {
+        return RenderMode.texture;
+    }
+
     /** Set by the settings button while Home is in front: open Home's own quick panel. */
     static final String EXTRA_QUICK_PANEL = "tvos.quick_panel";
 
