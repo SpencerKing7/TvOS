@@ -330,7 +330,10 @@ class _HomeViewState extends State<HomeView> {
                           if (i < _homeColumns) _lastTopColumn = i;
                           _scrollTo(0);
                         },
-                        onHold: () => setState(() => _moving = home[i].packageName),
+                        onHold: () {
+                          setState(() => _moving = home[i].packageName);
+                          context.read<HomeAmbience>().moving = true;
+                        },
                         moving: _moving == home[i].packageName,
                         moveArrows: _moving == home[i].packageName ? _arrowsAt(i, home.length) : const {},
                         onMoveKey: (direction) => _move(service, home[i], home.length, direction),
@@ -405,6 +408,7 @@ class _HomeViewState extends State<HomeView> {
       commit ? service.saveApplicationOrderInCategory(favorites) : service.cancelReorderApplication(favorites);
     }
     setState(() => _moving = null);
+    context.read<HomeAmbience>().moving = false;
   }
 
   /// Hold OK while moving: take the app off Home (it stays in All Apps).

@@ -146,7 +146,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
           const VideoLoops(),
           _painted(ambience, null, layer: _Layer.overlays, animate: false),
         ],
-        if (slides?.photo != null) _caption(landscapes[slides!.index], ambience.allApps),
+        if (slides?.photo != null) _caption(landscapes[slides!.index], ambience.allApps, ambience.moving),
       ],
     );
   }
@@ -154,11 +154,12 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
   /// Where the photo was taken and who took it (the licences require the photographer's
   /// name; the full licence for each is in assets/landscapes/CREDITS.md). Sized and placed
   /// to sit on the same line as the "All Apps" hint.
-  Widget _caption(Landscape landscape, double allApps) => Positioned(
+  Widget _caption(Landscape landscape, double allApps, bool moving) => Positioned(
         right: 56,
         bottom: 25,
         child: AnimatedOpacity(
-          opacity: allApps > 0.2 ? 0 : 1,
+          // Out of the way of All Apps, and of the move hint on the same line.
+          opacity: allApps > 0.2 || moving ? 0 : 1,
           duration: const Duration(milliseconds: 300),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 800),
