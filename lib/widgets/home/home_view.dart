@@ -265,8 +265,8 @@ class _HomeViewState extends State<HomeView> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 Align(alignment: Alignment.centerLeft, child: TopInfo(key: _clockKey)),
-                                const SizedBox(height: 24),
-                                Align(alignment: Alignment.centerLeft, child: slot),
+                                // Centred between the clock line and the app tiles, the same room above and below.
+                                Expanded(child: Align(alignment: Alignment.centerLeft, child: slot)),
                               ],
                             ),
                         ),
