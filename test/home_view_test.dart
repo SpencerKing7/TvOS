@@ -109,12 +109,70 @@ void main() {
       await tester.pump();
       verify(watch.launch(show)).called(1);
 
+      // The menu is not in the row: Right ends there, Up reaches the menu, Down comes back.
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await tester.pump();
+      expect(focused(), 'home slot');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
       expect(focused(), 'home menu');
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
       expect(focused(), 'home slot');
+    });
+
+    testWidgets('Up picks the card above the tile, and Down the tile below the card', (tester) async {
+      WatchNextProgram from(int id, String title, int hour) => WatchNextProgram(
+            id: id,
+            packageName: 'com.netflix.ninja',
+            title: title,
+            description: '',
+            watchNextType: 0,
+            lastEngagementTime: DateTime(2026, 11, 17, hour).millisecondsSinceEpoch,
+            playbackPosition: 1,
+            duration: 2,
+            intentUri: 'intent://$id',
+            posterArtUri: '',
+          );
+      final left = from(1, 'Left', 2);
+      final right = from(2, 'Right', 1);
+      final (watch, _) = await _pumpHome(tester, pixelRatio: 1.5, watching: [left, right]);
+
+      // From the last tile in the top row, Up lands on the card on the right.
+      for (var i = 0; i < 4; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+      }
+      // Tiles carry no debug label, so compare the focus node itself.
+      final tile = FocusManager.instance.primaryFocus;
+      expect(tile?.debugLabel, isNot('home menu'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      verify(watch.launch(right)).called(1);
+
+      // Down lands on the tile straight below the poster.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      final poster = tester.getTopLeft(find.byType(WatchCard)).dx + WatchCard.posterWidth / 2;
+      final below = FocusManager.instance.primaryFocus!;
+      expect(below, isNot(same(tile)));
+      expect(below.rect.left, lessThanOrEqualTo(poster));
+      expect(below.rect.right, greaterThanOrEqualTo(poster));
+
+      // From the first tile, Up lands on the card on the left.
+      for (var i = 0; i < 4; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await tester.pump();
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      verify(watch.launch(left)).called(1);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
     });
 
     testWidgets('shows only pinned apps, and Right then OK continues the second show', (tester) async {

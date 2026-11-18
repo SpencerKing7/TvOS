@@ -201,6 +201,31 @@ class _HomeViewState extends State<HomeView> {
   List<App> _home(AppsService service) =>
       _favorites(service)?.applications.where((a) => !_isSelf(a)).take(_homeSlots).toList() ?? [];
 
+  /// The top-row tile the remote was last on, where Down from the cards or the menu returns.
+  int _lastTopColumn = _slotColumn;
+
+  /// Focuses the top-row tile nearest the screen position [x], straight below the cards.
+  void _focusTileBelow(List<App> home, double x) {
+    var best = _lastTopColumn;
+    var bestDistance = double.infinity;
+    for (var i = 0; i < _homeColumns && i < home.length; i++) {
+      final box = _nodeFor(home[i].packageName).context?.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) continue;
+      final distance = (box.localToGlobal(box.size.center(Offset.zero)).dx - x).abs();
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = i;
+      }
+    }
+    _focusHomeSlot(best);
+  }
+
+  void _focusCardAbove(String packageName) {
+    final box = _nodeFor(packageName).context?.findRenderObject() as RenderBox?;
+    final x = box != null && box.hasSize ? box.localToGlobal(box.size.center(Offset.zero)).dx : 0.0;
+    (_slotKey.currentState as HomeSlotState?)?.focusNearest(x);
+  }
+
   /// Focuses a Home slot after the next frame (so a just-removed app's slot is rebuilt).
   void _focusHomeSlot(int index) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -229,8 +254,8 @@ class _HomeViewState extends State<HomeView> {
       focusNode: _slotNode,
       onSelect: _openSlot,
       onControl: (action) => context.read<NowPlayingService>().control(action),
-      onDown: () => _focusHomeSlot(_slotColumn),
-      onRight: _menuNode.requestFocus,
+      onDown: (x) => _focusTileBelow(home, x),
+      onUp: _menuNode.requestFocus,
     );
 
     return SingleChildScrollView(
@@ -280,8 +305,7 @@ class _HomeViewState extends State<HomeView> {
                           child: _MenuButton(
                             focusNode: _menuNode,
                             onPressed: _showHomeMenu,
-                            onDown: () => _focusHomeSlot(_homeColumns - 1),
-                            onLeft: slots.isEmpty ? null : _slotNode.requestFocus,
+                            onDown: () => slots.isEmpty ? _focusHomeSlot(_lastTopColumn) : _slotNode.requestFocus(),
                           ),
                         ),
                       ),
@@ -298,10 +322,14 @@ class _HomeViewState extends State<HomeView> {
                         focusNode: _nodeFor(home[i].packageName),
                         autofocus: i == 0,
                         // Up reaches the slot from under it and to its left, the menu from the last column.
+                        // Up reaches the card above this tile; with no cards, the menu.
                         onUp: i < _homeColumns
-                            ? (slots.isNotEmpty && i < _homeColumns - 1 ? _slotNode.requestFocus : _menuNode.requestFocus)
+                            ? () => slots.isEmpty ? _menuNode.requestFocus() : _focusCardAbove(home[i].packageName)
                             : null,
-                        onFocus: () => _scrollTo(0),
+                        onFocus: () {
+                          if (i < _homeColumns) _lastTopColumn = i;
+                          _scrollTo(0);
+                        },
                         onHold: () => setState(() => _moving = home[i].packageName),
                         moving: _moving == home[i].packageName,
                         moveArrows: _moving == home[i].packageName ? _arrowsAt(i, home.length) : const {},
@@ -453,9 +481,8 @@ class _MenuButton extends StatefulWidget {
   final FocusNode focusNode;
   final VoidCallback onPressed;
   final VoidCallback onDown;
-  final VoidCallback? onLeft;
 
-  const _MenuButton({required this.focusNode, required this.onPressed, required this.onDown, this.onLeft});
+  const _MenuButton({required this.focusNode, required this.onPressed, required this.onDown});
 
   @override
   State<_MenuButton> createState() => _MenuButtonState();
@@ -478,8 +505,10 @@ class _MenuButtonState extends State<_MenuButton> {
             widget.onDown();
             return KeyEventResult.handled;
           }
-          if (event.logicalKey == LogicalKeyboardKey.arrowLeft && widget.onLeft != null) {
-            widget.onLeft!();
+          // It stands alone above the cards: only Down leads anywhere.
+          if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+              event.logicalKey == LogicalKeyboardKey.arrowRight ||
+              event.logicalKey == LogicalKeyboardKey.arrowUp) {
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;

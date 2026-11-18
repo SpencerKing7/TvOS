@@ -116,23 +116,49 @@ class HomeSlot extends StatefulWidget {
 
   /// A player control pressed on the song in the big spot: `play`, `pause`, `next` or `previous`.
   final ValueChanged<String>? onControl;
-  final VoidCallback? onDown;
-  final VoidCallback? onRight;
+  /// Down, with the screen x of what was focused, so the tile straight below it can take over.
+  final ValueChanged<double>? onDown;
+  final VoidCallback? onUp;
 
   const HomeSlot(
-      {super.key, required this.entries, this.focusNode, this.onSelect, this.onControl, this.onDown, this.onRight});
+      {super.key, required this.entries, this.focusNode, this.onSelect, this.onControl, this.onDown, this.onUp});
 
   @override
-  State<HomeSlot> createState() => _HomeSlotState();
+  State<HomeSlot> createState() => HomeSlotState();
 }
 
-class _HomeSlotState extends State<HomeSlot> {
+class HomeSlotState extends State<HomeSlot> {
   bool _focused = false;
   int _index = 0;
 
-  // Which player control the remote is on, when the song in the big spot has them; it starts
-  // on play / pause each time the card is reached.
-  int _control = 1;
+  // On the song in the first place, which player control the remote is on; -1 is the card
+  // itself (OK opens the app). The row runs card → previous → play/pause → next → next card.
+  int _control = -1;
+
+  final _placeKeys = [for (var i = 0; i < slotPlaces; i++) GlobalKey()];
+
+  /// Focuses the card nearest the screen position [x] (from a tile below), so Up lands on
+  /// the card above where the remote was.
+  void focusNearest(double x) {
+    var best = 0;
+    var bestDistance = double.infinity;
+    for (var i = 0; i < _count && i < slotPlaces; i++) {
+      final box = _placeKeys[i].currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) continue;
+      final left = box.localToGlobal(Offset.zero).dx;
+      final right = left + box.size.width;
+      final distance = x < left ? left - x : (x > right ? x - right : 0.0);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = i;
+      }
+    }
+    setState(() {
+      _index = best;
+      _control = -1;
+    });
+    widget.focusNode?.requestFocus();
+  }
 
   int get _count => widget.entries.length;
 
@@ -140,6 +166,27 @@ class _HomeSlotState extends State<HomeSlot> {
   bool get _hasControls {
     final first = widget.entries.firstOrNull;
     return _index == 0 && first is SlotTrack && (first.playing || first.progress != null);
+  }
+
+  bool get _onControl => _hasControls && _control >= 0;
+
+  final _controlsKey = GlobalKey();
+
+  /// The screen x of the middle of what the remote is on: a control, or the card's art.
+  double _focusedX() {
+    if (_onControl) {
+      final box = _controlsKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box != null && box.hasSize) {
+        return box.localToGlobal(Offset(PlayerControls.centerOf(_control), box.size.height / 2)).dx;
+      }
+    }
+    final box = _placeKeys[_index.clamp(0, slotPlaces - 1)].currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return 0;
+    final entry = widget.entries[_index];
+    final artWidth = _index > 0
+        ? WatchCard.posterWidth
+        : (entry is SlotTrack ? HeroCard.height : HeroCard.height * 16 / 9);
+    return box.localToGlobal(Offset(artWidth / 2, 0)).dx;
   }
 
   @override
@@ -160,34 +207,36 @@ class _HomeSlotState extends State<HomeSlot> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
     if (AppCardKeys.validationKeys.contains(key)) {
-      if (_hasControls) {
+      if (_onControl) {
         _press();
       } else if (_index < _count) {
         widget.onSelect?.call(widget.entries[_index]);
       }
     } else if (key == LogicalKeyboardKey.arrowRight) {
-      // Along the controls, then on to the card beside, then out to the menu.
+      // From the song's card along its controls, then on to the card beside; the row ends there.
       if (_hasControls && _control < PlayerControls.actions.length - 1) {
         setState(() => _control++);
       } else if (_index < _count - 1) {
-        setState(() => _index++);
-      } else {
-        widget.onRight?.call();
+        setState(() {
+          _index++;
+          _control = -1;
+        });
       }
     } else if (key == LogicalKeyboardKey.arrowLeft) {
-      if (_hasControls && _control > 0) {
+      if (_hasControls && _control >= 0) {
         setState(() => _control--);
       } else if (_index > 0) {
         setState(() {
           _index--;
-          // Back from the card beside lands on the nearest control.
+          // Back from the card beside lands on the nearest control, or the card if it has none.
           _control = PlayerControls.actions.length - 1;
         });
       }
     } else if (key == LogicalKeyboardKey.arrowDown) {
-      widget.onDown?.call();
-    } else if (key != LogicalKeyboardKey.arrowUp) {
-      // Up leads nowhere from the top of the screen.
+      widget.onDown?.call(_focusedX());
+    } else if (key == LogicalKeyboardKey.arrowUp) {
+      widget.onUp?.call();
+    } else {
       return KeyEventResult.ignored;
     }
     return KeyEventResult.handled;
@@ -200,7 +249,9 @@ class _HomeSlotState extends State<HomeSlot> {
         SlotWatch(:final program) => WatchCard(key: ValueKey(entry.key), program: program, focused: focused, textWidth: 180),
       };
 
-  Widget _place(int i, Widget Function(SlotEntry entry, bool focused) card) => AnimatedSwitcher(
+  Widget _place(int i, Widget Function(SlotEntry entry, bool focused) card) => KeyedSubtree(
+        key: _placeKeys[i],
+        child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 600),
         switchInCurve: Curves.easeOut,
         switchOutCurve: Curves.easeIn,
@@ -208,6 +259,7 @@ class _HomeSlotState extends State<HomeSlot> {
         child: i < widget.entries.length
             ? card(widget.entries[i], _focused && i == _index)
             : SizedBox.shrink(key: ValueKey('empty$i')),
+        ),
       );
 
   /// The most current thing large, then the next, small, after a hairline; all flowing left.
@@ -229,7 +281,13 @@ class _HomeSlotState extends State<HomeSlot> {
 
   Widget _heroCard(SlotEntry entry, bool focused) => switch (entry) {
         SlotTrack(:final track, :final playing, :final progress) => HeroCard.track(
-            key: ValueKey(entry.key), track: track, playing: playing, progress: progress, focused: focused, control: _control),
+            key: ValueKey(entry.key),
+            track: track,
+            playing: playing,
+            progress: progress,
+            focused: focused,
+            control: _control,
+            controlsKey: _controlsKey),
         SlotWatch(:final program) => HeroCard.watch(key: ValueKey(entry.key), program: program, focused: focused),
       };
 
@@ -248,7 +306,7 @@ class _HomeSlotState extends State<HomeSlot> {
                 _focused = focused;
                 if (!focused) {
                   _index = 0;
-                  _control = 1;
+                  _control = -1;
                 }
               }),
               onKeyEvent: _onKey,
@@ -311,12 +369,13 @@ class HeroCard extends StatelessWidget {
           required bool playing,
           TrackProgress? progress,
           bool focused = false,
-          int? control}) =>
+          int? control,
+          Key? controlsKey}) =>
       HeroCard(
         key: key,
         imageWidth: height,
         // With controls on screen the remote is on one of them, so only that one lights up.
-        imageFocused: control == null || !(playing || progress != null),
+        imageFocused: control == null || control < 0 || !(playing || progress != null),
         imageKey: track.art == null ? 'none' : identityHashCode(track.art),
         image: track.art == null
             ? const _Glyph(Icons.music_note_rounded)
@@ -335,7 +394,7 @@ class HeroCard extends StatelessWidget {
             ? TrackProgressBar(
                 progress,
                 width: textWidth,
-                center: focused && control != null ? PlayerControls(playing: playing, selected: control) : null,
+                center: focused && control != null ? PlayerControls(key: controlsKey, playing: playing, selected: control) : null,
               )
             : null,
         focused: focused,
@@ -440,6 +499,12 @@ class PlayerControls extends StatelessWidget {
 
   const PlayerControls({super.key, required this.playing, required this.selected});
 
+  static const double _button = 26;
+  static const double _gap = 3;
+
+  /// The x of control [i]'s middle, from the row's left edge.
+  static double centerOf(int i) => _gap + i * (_button + 2 * _gap) + _button / 2;
+
   @override
   Widget build(BuildContext context) {
     final icons = [Icons.skip_previous_rounded, playing ? Icons.pause_rounded : Icons.play_arrow_rounded, Icons.skip_next_rounded];
@@ -449,9 +514,9 @@ class PlayerControls extends StatelessWidget {
         for (var i = 0; i < icons.length; i++)
           AnimatedContainer(
             duration: const Duration(milliseconds: 140),
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            width: 26,
-            height: 26,
+            margin: const EdgeInsets.symmetric(horizontal: _gap),
+            width: _button,
+            height: _button,
             decoration: BoxDecoration(color: i == selected ? Colors.white : Colors.transparent, shape: BoxShape.circle),
             child: Icon(icons[i], size: 20, color: i == selected ? Colors.black87 : Colors.white70),
           ),
