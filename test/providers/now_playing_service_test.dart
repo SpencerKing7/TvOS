@@ -121,4 +121,49 @@ void main() {
     expect(second.lastSong?.art, art);
     expect(second.lastSongAt, clock);
   });
+
+  group('progress', () {
+    final at = DateTime(2026, 11, 17, 21);
+    Map<String, Object> timed({bool playing = true, int duration = 225000}) => {
+          ..._song('One', playing: playing),
+          'durationMs': duration,
+          'positionMs': 83000,
+          'positionAtMs': at.millisecondsSinceEpoch,
+          'speed': 1.0,
+        };
+
+    test('is read from a playing event and moves forward from its snapshot', () async {
+      final music = await service();
+      events.add(timed());
+      await settle();
+
+      final progress = music.progress!;
+      expect(progress.duration, const Duration(seconds: 225));
+      expect(progress.at(at), const Duration(seconds: 83));
+      expect(progress.at(at.add(const Duration(seconds: 10))), const Duration(seconds: 93));
+    });
+
+    test('stops at the end of the track', () async {
+      final music = await service();
+      events.add(timed());
+      await settle();
+      expect(music.progress!.at(at.add(const Duration(hours: 1))), const Duration(seconds: 225));
+    });
+
+    test('goes away on pause', () async {
+      final music = await service();
+      events.add(timed());
+      events.add(timed(playing: false));
+      await settle();
+      expect(music.progress, isNull);
+    });
+
+    test('is null when the app reports no length', () async {
+      final music = await service();
+      events.add(timed(duration: 0));
+      await settle();
+      expect(music.playing?.title, 'One');
+      expect(music.progress, isNull);
+    });
+  });
 }

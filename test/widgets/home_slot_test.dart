@@ -150,5 +150,38 @@ void main() {
       await pump(tester);
       expect(find.byType(WatchCard), findsNothing);
     });
+
+    testWidgets('shows song progress only while playing and the length is known', (tester) async {
+      final song = {'packageName': 'com.spotify.tv.android', 'title': 'Song', 'artist': 'Band', 'playing': true};
+      await pump(tester);
+      await send(tester, song);
+      expect(find.byType(TrackProgressBar), findsNothing);
+
+      await send(tester, {
+        ...song,
+        'durationMs': 225000,
+        'positionMs': 83000,
+        'positionAtMs': DateTime.now().millisecondsSinceEpoch,
+        'speed': 1.0,
+      });
+      expect(find.byType(TrackProgressBar), findsOneWidget);
+      expect(find.text('3:45'), findsOneWidget);
+
+      await send(tester, {...song, 'playing': false});
+      expect(find.byType(TrackProgressBar), findsNothing);
+    });
+  });
+
+  testWidgets('TrackProgressBar shows elapsed and total time and ticks forward', (tester) async {
+    final start = DateTime(2026, 11, 17, 21);
+    var now = start;
+    final progress = TrackProgress(duration: const Duration(minutes: 3, seconds: 45), position: const Duration(seconds: 83), positionAt: start);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TrackProgressBar(progress, now: () => now))));
+    expect(find.text('1:23'), findsOneWidget);
+    expect(find.text('3:45'), findsOneWidget);
+
+    now = start.add(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('1:25'), findsOneWidget);
   });
 }

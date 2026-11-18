@@ -47,6 +47,50 @@ class Track {
   }
 }
 
+/// How far into the playing track, as of one moment; [at] moves it forward from there.
+@immutable
+class TrackProgress {
+  final Duration duration;
+  final Duration position;
+  final DateTime positionAt;
+  final double speed;
+
+  const TrackProgress({required this.duration, required this.position, required this.positionAt, this.speed = 1});
+
+  /// The position at [now], clamped to the track.
+  Duration at(DateTime now) {
+    final elapsed = now.difference(positionAt).inMilliseconds * speed;
+    final ms = (position.inMilliseconds + elapsed).round().clamp(0, duration.inMilliseconds);
+    return Duration(milliseconds: ms);
+  }
+
+  /// Null when the app reports no length (a radio stream, say) or no position.
+  static TrackProgress? fromEvent(Map<dynamic, dynamic> event) {
+    final duration = event['durationMs'];
+    final position = event['positionMs'];
+    final positionAt = event['positionAtMs'];
+    if (duration is! int || duration <= 0 || position is! int || positionAt is! int) return null;
+    final speed = event['speed'];
+    return TrackProgress(
+      duration: Duration(milliseconds: duration),
+      position: Duration(milliseconds: position),
+      positionAt: DateTime.fromMillisecondsSinceEpoch(positionAt),
+      speed: speed is num ? speed.toDouble() : 1,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is TrackProgress &&
+      other.duration == duration &&
+      other.position == position &&
+      other.positionAt == positionAt &&
+      other.speed == speed;
+
+  @override
+  int get hashCode => Object.hash(duration, position, positionAt, speed);
+}
+
 /// What is playing on the TV right now, and the last song heard, which outlives a restart.
 class NowPlayingService extends ChangeNotifier {
   static const _prefsKey = 'now_playing_last';
@@ -57,6 +101,7 @@ class NowPlayingService extends ChangeNotifier {
   StreamSubscription<dynamic>? _subscription;
 
   Track? _playing;
+  TrackProgress? _progress;
   Track? _lastSong;
   DateTime? _lastSongAt;
 
@@ -78,6 +123,9 @@ class NowPlayingService extends ChangeNotifier {
   /// The track playing at this moment, if any.
   Track? get playing => _playing;
 
+  /// How far into [playing], when the app reports it; null when nothing plays.
+  TrackProgress? get progress => _playing == null ? null : _progress;
+
   /// The most recent track that played, including the one playing now.
   Track? get lastSong => _lastSong;
 
@@ -96,6 +144,7 @@ class NowPlayingService extends ChangeNotifier {
       // and the same bytes keep the image from being decoded again on every event.
       final withArt = !changed && _lastSong?.art != null ? track.withArt(_lastSong!.art) : track;
       _playing = withArt;
+      _progress = TrackProgress.fromEvent(event);
       _lastSong = withArt;
       _lastSongAt = _now();
       if (changed || artArrived) _save(withArt);
@@ -106,6 +155,7 @@ class NowPlayingService extends ChangeNotifier {
     if (_playing != null) {
       // Just paused or stopped: it becomes the last song, as of now.
       _playing = null;
+      _progress = null;
       _lastSongAt = _now();
       if (_lastSong != null) _saveTime();
       notifyListeners();

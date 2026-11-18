@@ -7,6 +7,8 @@
  * (at your option) any later version.
  */
 
+import 'dart:async';
+
 import 'package:collection/collection.dart';
 import 'package:flauncher/models/watch_next_program.dart';
 import 'package:flauncher/providers/apps_service.dart';
@@ -45,8 +47,9 @@ sealed class SlotEntry {
 class SlotTrack extends SlotEntry {
   final Track track;
   final bool playing;
+  final TrackProgress? progress;
 
-  const SlotTrack(this.track, {required this.playing});
+  const SlotTrack(this.track, {required this.playing, this.progress});
 
   @override
   String get key => '${playing ? 'playing' : 'last'}:${track.key}';
@@ -83,7 +86,7 @@ SlotEntry? currentSlot(NowPlayingService music, WatchNextService watch) {
   final last = music.lastSong;
   final watched = watch.hasPermission ? latestWatch(watch.programs) : null;
   return pickSlot<SlotEntry>(
-    live: playing == null ? null : SlotTrack(playing, playing: true),
+    live: playing == null ? null : SlotTrack(playing, playing: true, progress: music.progress),
     recent: [
       (music.lastSongAt, last == null ? null : SlotTrack(last, playing: false)),
       (watched == null ? null : watchedAt(watched), watched == null ? null : SlotWatch(watched)),
@@ -132,8 +135,8 @@ class _HomeSlotState extends State<HomeSlot> {
     final entry = widget.entry;
     final Widget card = switch (entry) {
       null => const SizedBox.shrink(key: ValueKey('empty')),
-      SlotTrack(:final track, :final playing) =>
-        TrackCard(key: ValueKey(entry.key), track: track, playing: playing, focused: _focused),
+      SlotTrack(:final track, :final playing, :final progress) =>
+        TrackCard(key: ValueKey(entry.key), track: track, playing: playing, progress: progress, focused: _focused),
       SlotWatch(:final program) => WatchCard(key: ValueKey(entry.key), program: program, focused: _focused),
     };
 
@@ -167,9 +170,10 @@ class TrackCard extends StatelessWidget {
 
   final Track track;
   final bool playing;
+  final TrackProgress? progress;
   final bool focused;
 
-  const TrackCard({super.key, required this.track, required this.playing, this.focused = false});
+  const TrackCard({super.key, required this.track, required this.playing, this.progress, this.focused = false});
 
   @override
   Widget build(BuildContext context) => _SlotCard(
@@ -189,9 +193,78 @@ class TrackCard extends StatelessWidget {
         caption: playing ? 'NOW PLAYING' : 'LAST PLAYED',
         title: track.title,
         subtitle: track.artist,
+        footer: playing && progress != null ? TrackProgressBar(progress!) : null,
         dim: !playing,
         focused: focused,
       );
+}
+
+/// A thin bar with elapsed and total time, moved forward locally each second.
+class TrackProgressBar extends StatefulWidget {
+  static const double width = 240;
+
+  final TrackProgress progress;
+  final DateTime Function() now;
+
+  const TrackProgressBar(this.progress, {super.key, this.now = DateTime.now});
+
+  @override
+  State<TrackProgressBar> createState() => _TrackProgressBarState();
+}
+
+class _TrackProgressBarState extends State<TrackProgressBar> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  static String _clock(Duration d) {
+    final s = d.inSeconds;
+    final h = s ~/ 3600;
+    final mm = (s % 3600 ~/ 60).toString();
+    final ss = (s % 60).toString().padLeft(2, '0');
+    return h > 0 ? '$h:${mm.padLeft(2, '0')}:$ss' : '$mm:$ss';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.progress;
+    final at = p.at(widget.now());
+    final total = p.duration.inMilliseconds;
+    const style = TextStyle(color: Colors.white60, fontSize: 13, fontFeatures: [FontFeature.tabularFigures()], shadows: homeTextShadows);
+    return SizedBox(
+      width: TrackProgressBar.width,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: total == 0 ? 0 : at.inMilliseconds / total,
+              minHeight: 3,
+              backgroundColor: Colors.white24,
+              valueColor: const AlwaysStoppedAnimation(Colors.white),
+            ),
+          ),
+          const SizedBox(height: 5),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [Text(_clock(at), style: style), Text(_clock(p.duration), style: style)],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// A landscape poster (or the app's banner) with progress, beside the title.
@@ -241,6 +314,7 @@ class _SlotCard extends StatelessWidget {
   final String caption;
   final String title;
   final String subtitle;
+  final Widget? footer;
   final bool dim;
   final bool focused;
 
@@ -249,6 +323,7 @@ class _SlotCard extends StatelessWidget {
     required this.caption,
     required this.title,
     required this.subtitle,
+    this.footer,
     required this.dim,
     required this.focused,
   });
@@ -304,6 +379,7 @@ class _SlotCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Colors.white70, fontSize: 19, shadows: homeTextShadows),
                       ),
+                    if (footer != null) footer!,
                   ],
                 ),
               ),

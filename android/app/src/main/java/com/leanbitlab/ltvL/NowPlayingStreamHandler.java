@@ -18,6 +18,7 @@ import android.media.session.MediaSessionManager;
 import android.media.session.PlaybackState;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 
 import java.util.ArrayList;
@@ -31,8 +32,9 @@ import java.util.concurrent.Executors;
 import io.flutter.plugin.common.EventChannel;
 
 /**
- * Streams what any app is playing (its media session) to Dart: title, artist, album, art and
- * whether it is playing. Sends an empty map when nothing has a session.
+ * Streams what any app is playing (its media session) to Dart: title, artist, album, art,
+ * whether it is playing, and (when the app reports them) duration and a position snapshot.
+ * Sends an empty map when nothing has a session.
  *
  * Reading other apps' sessions needs notification access for {@link LauncherNotificationListenerService}.
  * Until that is granted this sends nothing, and it retries whenever the listener service connects.
@@ -190,7 +192,8 @@ class NowPlayingStreamHandler implements EventChannel.StreamHandler {
         String artist = text(metadata, MediaMetadata.METADATA_KEY_ARTIST);
         if (artist.isEmpty()) artist = text(metadata, MediaMetadata.METADATA_KEY_ALBUM_ARTIST);
         String album = text(metadata, MediaMetadata.METADATA_KEY_ALBUM);
-        boolean playing = isPlaying(controller.getPlaybackState());
+        PlaybackState state = controller.getPlaybackState();
+        boolean playing = isPlaying(state);
 
         Map<String, Object> event = new HashMap<>();
         event.put("packageName", packageName);
@@ -199,8 +202,21 @@ class NowPlayingStreamHandler implements EventChannel.StreamHandler {
         event.put("album", album);
         event.put("playing", playing);
 
+        long duration = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION);
+        String positionKey = "";
+        if (duration > 0 && state != null && state.getPosition() != PlaybackState.PLAYBACK_POSITION_UNKNOWN) {
+            // The session's clock is elapsedRealtime, which Dart can't read: hand over wall-clock time.
+            long positionAt = System.currentTimeMillis()
+                    - (SystemClock.elapsedRealtime() - state.getLastPositionUpdateTime());
+            event.put("durationMs", duration);
+            event.put("positionMs", state.getPosition());
+            event.put("positionAtMs", positionAt);
+            event.put("speed", (double) state.getPlaybackSpeed());
+            positionKey = state.getPosition() + "@" + state.getLastPositionUpdateTime() + "x" + state.getPlaybackSpeed();
+        }
+
         String trackKey = packageName + "\n" + title + "\n" + artist + "\n" + album;
-        String sendKey = trackKey + "\n" + playing;
+        String sendKey = trackKey + "\n" + playing + "\n" + duration + "\n" + positionKey;
         if (trackKey.equals(lastTrackKey)) {
             if (lastArt != null) event.put("art", lastArt);
             send(sendKey, event);
