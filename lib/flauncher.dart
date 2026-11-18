@@ -38,6 +38,7 @@ import 'package:flauncher/providers/settings_service.dart';
 import 'package:flauncher/l10n/app_localizations.dart';
 
 import 'models/category.dart';
+import 'widgets/home/standby.dart';
 
 class FLauncher extends StatefulWidget {
   const FLauncher({super.key});
@@ -90,7 +91,7 @@ class _FLauncherState extends State<FLauncher> {
                 child: Consumer<AppsService>(
                   builder: (context, appsService, _) {
                     if (appsService.initialized && _useHomeView) {
-                      return const KeepAwake(child: HomeView());
+                      return const KeepAwake(child: Standby(child: HomeView()));
                     }
                     if (appsService.initialized) {
                       return Selector<WatchNextService, bool>(

@@ -195,6 +195,7 @@ class _AmbientBackgroundState extends State<AmbientBackground> with WidgetsBindi
               glow: glow ?? Colors.transparent,
               glowCenter: center,
               allApps: ambience.allApps,
+              standby: ambience.standby,
               slides: slides,
               layer: layer,
             ),
@@ -244,6 +245,7 @@ class _AmbientPainter extends CustomPainter {
   final Color glow;
   final Offset? glowCenter;
   final double allApps;
+  final double standby;
   final _Slides? slides;
   final _Layer layer;
 
@@ -252,6 +254,7 @@ class _AmbientPainter extends CustomPainter {
     required this.glow,
     required this.glowCenter,
     required this.allApps,
+    this.standby = 0,
     required this.slides,
     required this.layer,
   }) : super(repaint: seconds);
@@ -385,7 +388,7 @@ class _AmbientPainter extends CustomPainter {
     // reads around the card; soft and wide so it frames the app rather than competing.
     // Not over photos: tinting a landscape muddies it.
     final center = glowCenter;
-    if (!darker && glow.alpha > 0 && center != null) {
+    if (!darker && glow.alpha > 0 && center != null && standby < 1) {
       final radius = size.width * 0.38;
       canvas.drawCircle(
         center,
@@ -394,7 +397,7 @@ class _AmbientPainter extends CustomPainter {
           ..shader = ui.Gradient.radial(
             center,
             radius,
-            [glow.withOpacity(0.42 * glow.opacity), glow.withOpacity(0.16 * glow.opacity), glow.withOpacity(0)],
+            [glow.withOpacity(0.42 * glow.opacity * (1 - standby)), glow.withOpacity(0.16 * glow.opacity * (1 - standby)), glow.withOpacity(0)],
             [0, 0.45, 1],
           ),
       );

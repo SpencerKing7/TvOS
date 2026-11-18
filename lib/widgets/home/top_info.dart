@@ -25,7 +25,7 @@ const homeTextShadows = [
   Shadow(color: Colors.black45, blurRadius: 18),
 ];
 
-/// Time · date · weather (now, high and low) on one quiet line at the top of Home.
+/// Time · date · weather on one quiet line at the top of Home.
 class TopInfo extends StatefulWidget {
   const TopInfo({super.key});
 
@@ -89,10 +89,8 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
       'latitude': '$_latitude',
       'longitude': '$_longitude',
       'current': 'temperature_2m,weather_code,is_day',
-      'daily': 'temperature_2m_max,temperature_2m_min',
       'temperature_unit': 'fahrenheit',
       'timezone': 'auto',
-      'forecast_days': '1',
     });
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
     try {
@@ -130,7 +128,8 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
       children: [
         Text(
           DateFormat('h:mm').format(_now),
-          style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w300, shadows: homeTextShadows),
+          // The same size as the date and weather: one even line, only brighter.
+          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w400, shadows: homeTextShadows),
         ),
         dot(),
         Text(_date(_now), style: quiet),
@@ -139,11 +138,6 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
           Icon(weather.icon, color: Colors.white70, size: 20, shadows: homeTextShadows),
           const SizedBox(width: 6),
           Text('${weather.temperature}°', style: quiet),
-          const SizedBox(width: 10),
-          Text(
-            'H ${weather.high}°  L ${weather.low}°',
-            style: const TextStyle(color: Colors.white54, fontSize: 16, shadows: homeTextShadows),
-          ),
         ],
       ],
     );
@@ -152,19 +146,14 @@ class _TopInfoState extends State<TopInfo> with WidgetsBindingObserver {
 
 class _Weather {
   final int temperature;
-  final int high;
-  final int low;
   final IconData icon;
 
-  const _Weather(this.temperature, this.high, this.low, this.icon);
+  const _Weather(this.temperature, this.icon);
 
   factory _Weather.fromJson(Map<String, dynamic> json) {
     final current = json['current'] as Map<String, dynamic>;
-    final daily = json['daily'] as Map<String, dynamic>;
     return _Weather(
       (current['temperature_2m'] as num).round(),
-      ((daily['temperature_2m_max'] as List).first as num).round(),
-      ((daily['temperature_2m_min'] as List).first as num).round(),
       _iconFor((current['weather_code'] as num).toInt(), current['is_day'] == 1),
     );
   }
