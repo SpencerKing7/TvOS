@@ -20,6 +20,7 @@ import 'package:flauncher/widgets/app_card_keys.dart';
 import 'package:flauncher/widgets/focus_keyboard_listener.dart';
 import 'package:flauncher/widgets/home/ambience.dart';
 import 'package:flauncher/widgets/home/home_slot.dart';
+import 'package:flauncher/widgets/home/standby.dart';
 import 'package:flauncher/widgets/home/top_info.dart';
 import 'package:flauncher/widgets/home/video_loops.dart';
 import 'package:flauncher/widgets/settings/settings_panel.dart';
@@ -289,7 +290,14 @@ class _HomeViewState extends State<HomeView> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Align(alignment: Alignment.centerLeft, child: TopInfo(key: _clockKey)),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  // In standby the same clock is drawn over the background instead.
+                                  child: Opacity(
+                                    opacity: context.select<HomeAmbience, bool>((a) => a.standby > 0) ? 0 : 1,
+                                    child: TopInfo(key: _clockKey),
+                                  ),
+                                ),
                                 // Centred between the clock line and the app tiles, the same room above and below.
                                 Expanded(child: Align(alignment: Alignment.centerLeft, child: slot)),
                               ],
@@ -306,6 +314,7 @@ class _HomeViewState extends State<HomeView> {
                             focusNode: _menuNode,
                             onPressed: _showHomeMenu,
                             onDown: () => slots.isEmpty ? _focusHomeSlot(_lastTopColumn) : _slotNode.requestFocus(),
+                            onUp: () => Standby.enter(context),
                           ),
                         ),
                       ),
@@ -485,8 +494,9 @@ class _MenuButton extends StatefulWidget {
   final FocusNode focusNode;
   final VoidCallback onPressed;
   final VoidCallback onDown;
+  final VoidCallback onUp;
 
-  const _MenuButton({required this.focusNode, required this.onPressed, required this.onDown});
+  const _MenuButton({required this.focusNode, required this.onPressed, required this.onDown, required this.onUp});
 
   @override
   State<_MenuButton> createState() => _MenuButtonState();
@@ -509,10 +519,12 @@ class _MenuButtonState extends State<_MenuButton> {
             widget.onDown();
             return KeyEventResult.handled;
           }
-          // It stands alone above the cards: only Down leads anywhere.
-          if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-              event.logicalKey == LogicalKeyboardKey.arrowRight ||
-              event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          // It stands alone above the cards: Down goes back to them, Up on into standby.
+          if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            widget.onUp();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowLeft || event.logicalKey == LogicalKeyboardKey.arrowRight) {
             return KeyEventResult.handled;
           }
           return KeyEventResult.ignored;

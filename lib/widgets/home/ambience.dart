@@ -48,6 +48,19 @@ class HomeAmbience extends ChangeNotifier {
     notifyListeners();
   }
 
+  double _standby = 0;
+
+  /// How far into standby (0 Home, 1 standby): the focused app's glow fades, and Home hides its clock.
+  double get standby => _standby;
+
+  set standby(double value) {
+    final clamped = value.clamp(0.0, 1.0);
+    if ((clamped - _standby).abs() < 0.01 && clamped != 0 && clamped != 1) return;
+    if (clamped == _standby) return;
+    _standby = clamped;
+    notifyListeners();
+  }
+
   bool _moving = false;
 
   /// An app is being moved: the move hint takes the bottom line, so the photo credit steps aside.
