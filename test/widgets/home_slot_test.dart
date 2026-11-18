@@ -6,6 +6,7 @@ import 'package:flauncher/providers/now_playing_service.dart';
 import 'package:flauncher/providers/watch_next_service.dart';
 import 'package:flauncher/widgets/home/home_slot.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
@@ -13,9 +14,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../mocks.mocks.dart';
 
-WatchNextProgram program({int id = 1, String title = 'Show', int type = 0, required int at}) => WatchNextProgram(
+WatchNextProgram program(
+        {int id = 1, String title = 'Show', int type = 0, String packageName = 'com.netflix.ninja', required int at}) =>
+    WatchNextProgram(
       id: id,
-      packageName: 'com.netflix.ninja',
+      packageName: packageName,
       title: title,
       description: 'S1 E2',
       watchNextType: type,
@@ -51,6 +54,16 @@ void main() {
     test('skips the watchlist and untitled items', () {
       final picked = latestWatch([program(id: 1, type: 3, at: at), program(id: 2, title: '', at: at), program(id: 3, at: at)]);
       expect(picked?.id, 3);
+    });
+
+    test('the two newest, newest first, only from the given apps', () {
+      final picked = latestWatches([
+        program(id: 1, at: at - 3000),
+        program(id: 2, at: at - 1000, packageName: 'not.pinned'),
+        program(id: 3, at: at),
+        program(id: 4, at: at - 2000),
+      ], apps: {'com.netflix.ninja'});
+      expect(picked.map((p) => p.id), [3, 4]);
     });
 
     test('reads engagement times sent in seconds', () {
@@ -170,6 +183,39 @@ void main() {
       await send(tester, {...song, 'playing': false});
       expect(find.byType(TrackProgressBar), findsNothing);
     });
+  });
+
+  testWidgets('two stacked shows: Down moves to the second, OK picks it, Down again leaves', (tester) async {
+    final at = DateTime(2026, 11, 17, 21).millisecondsSinceEpoch;
+    final node = FocusNode();
+    final selected = <int>[];
+    var downs = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: HomeSlot(
+          entry: SlotWatch([program(id: 1, title: 'First', at: at), program(id: 2, title: 'Second', at: at)]),
+          focusNode: node,
+          onSelect: selected.add,
+          onDown: () => downs++,
+        ),
+      ),
+    ));
+    expect(find.byType(WatchCard), findsNWidgets(2));
+    node.requestFocus();
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(selected, [1]);
+    expect(downs, 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    expect(downs, 1);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(selected, [1, 0]);
+    node.dispose();
   });
 
   testWidgets('TrackProgressBar shows elapsed and total time and ticks forward', (tester) async {

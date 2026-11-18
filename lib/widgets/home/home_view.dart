@@ -136,14 +136,14 @@ class _HomeViewState extends State<HomeView> {
   }
 
   /// OK on the slot: back into the song's app, or straight to where the show was left.
-  void _openSlot(SlotEntry entry) {
+  void _openSlot(SlotEntry entry, int index) {
     switch (entry) {
       case SlotTrack(:final track):
         final apps = context.read<AppsService>();
         final app = apps.applications.firstWhereOrNull((a) => a.packageName == track.packageName);
         if (app != null) apps.launchApp(app);
-      case SlotWatch(:final program):
-        context.read<WatchNextService>().launch(program);
+      case SlotWatch(:final programs):
+        context.read<WatchNextService>().launch(programs[index.clamp(0, programs.length - 1)]);
     }
   }
 
@@ -215,7 +215,8 @@ class _HomeViewState extends State<HomeView> {
     final home = _home(service);
     final everything = _allApps(service);
     final screenHeight = MediaQuery.sizeOf(context).height;
-    final slot = currentSlot(context.watch<NowPlayingService>(), context.watch<WatchNextService>());
+    final slot = currentSlot(context.watch<NowPlayingService>(), context.watch<WatchNextService>(),
+        apps: {for (final app in home) app.packageName});
     // The slot emptied under focus (nothing left to show): drop back to the apps below it.
     if (slot == null && _slotNode.hasFocus) _focusHomeSlot(_slotColumn);
 
@@ -256,7 +257,7 @@ class _HomeViewState extends State<HomeView> {
                                   child: HomeSlot(
                                     entry: slot,
                                     focusNode: _slotNode,
-                                    onSelect: slot == null ? null : () => _openSlot(slot),
+                                    onSelect: slot == null ? null : (index) => _openSlot(slot, index),
                                     onDown: () => _focusHomeSlot(_slotColumn),
                                     onRight: _menuNode.requestFocus,
                                   ),

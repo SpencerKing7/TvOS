@@ -114,6 +114,39 @@ void main() {
       expect(focused(), 'home slot');
     });
 
+    testWidgets('shows only pinned apps, and Down then OK continues the second show', (tester) async {
+      WatchNextProgram from(int id, String title, String package, int hour) => WatchNextProgram(
+            id: id,
+            packageName: package,
+            title: title,
+            description: '',
+            watchNextType: 0,
+            lastEngagementTime: DateTime(2026, 11, 17, hour).millisecondsSinceEpoch,
+            playbackPosition: 1,
+            duration: 2,
+            intentUri: 'intent://$id',
+            posterArtUri: '',
+          );
+      final older = from(2, 'Older', 'com.peacocktv.peacockandroid', 1);
+      final (watch, _) = await _pumpHome(tester, pixelRatio: 1.5, watching: [
+        from(3, 'Unpinned', 'not.on.home', 3),
+        from(1, 'Newest', 'com.netflix.ninja', 2),
+        older,
+      ]);
+      expect(find.text('Unpinned'), findsNothing);
+      expect(find.text('Newest'), findsOneWidget);
+      expect(find.text('Older'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(focused(), 'home slot');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      verify(watch.launch(older)).called(1);
+    });
+
     testWidgets('with nothing in it, Up goes to the menu as before', (tester) async {
       await _pumpHome(tester, pixelRatio: 1.5);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
