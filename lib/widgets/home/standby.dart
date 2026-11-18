@@ -23,6 +23,10 @@ import 'package:flauncher/widgets/home/top_info.dart';
 /// only brings Home back.
 class Standby extends StatefulWidget {
   static const Duration idle = Duration(minutes: 10);
+
+  /// With no presses for this long, focus leaves Home (nothing looks selected); the first
+  /// press puts it back, and does nothing else.
+  static const Duration rest = Duration(seconds: 30);
   static const Duration slide = Duration(milliseconds: 1100);
 
   final Widget child;
@@ -47,6 +51,9 @@ class StandbyState extends State<Standby> with SingleTickerProviderStateMixin, W
   Timer? _idle;
   bool _standby = false;
 
+  Timer? _restTimer;
+  bool _resting = false;
+
   // The wake text shows for a while after entering, then fades away for good.
   static const _hintFor = Duration(seconds: 15);
   Timer? _hintTimer;
@@ -60,6 +67,9 @@ class StandbyState extends State<Standby> with SingleTickerProviderStateMixin, W
   LogicalKeyboardKey? _wakeKey;
 
   bool get standby => _standby;
+
+  /// Focus has stepped off Home after a quiet spell.
+  bool get resting => _resting;
 
   @override
   void initState() {
@@ -78,6 +88,7 @@ class StandbyState extends State<Standby> with SingleTickerProviderStateMixin, W
     WidgetsBinding.instance.removeObserver(this);
     HardwareKeyboard.instance.removeHandler(_onAnyKey);
     _idle?.cancel();
+    _restTimer?.cancel();
     _hintTimer?.cancel();
     _slide.dispose();
     _standbyNode.dispose();
@@ -91,24 +102,45 @@ class StandbyState extends State<Standby> with SingleTickerProviderStateMixin, W
       _restartIdle();
     } else {
       _idle?.cancel();
+      _restTimer?.cancel();
     }
   }
 
   // Watches every press to reset the idle clock; never consumes one.
   bool _onAnyKey(KeyEvent event) {
-    if (!_standby) _restartIdle();
+    // While resting or in standby the press is waking Home; that restarts the clocks itself.
+    if (!_standby && !_resting) _restartIdle();
     return false;
   }
 
   void _restartIdle() {
     _idle?.cancel();
     _idle = Timer(Standby.idle, enter);
+    _restTimer?.cancel();
+    _restTimer = Timer(Standby.rest, _rest);
+  }
+
+  /// Takes focus off Home, keeping where it was. Not while a panel or dialog is open over Home.
+  void _rest() {
+    if (!mounted || _standby || _resting) return;
+    final focus = FocusManager.instance.primaryFocus;
+    final route = focus?.context == null ? null : ModalRoute.of(focus!.context!);
+    if (focus == null || route == null || !route.isFirst) {
+      _restTimer = Timer(Standby.rest, _rest);
+      return;
+    }
+    _returnTo = focus;
+    _resting = true;
+    _standbyNode.requestFocus();
   }
 
   void enter() {
     if (!mounted || _standby) return;
     _idle?.cancel();
-    _returnTo = FocusManager.instance.primaryFocus;
+    _restTimer?.cancel();
+    // Resting already holds where focus was (it's on standby's own node now).
+    if (!_resting) _returnTo = FocusManager.instance.primaryFocus;
+    _resting = false;
     _hintTimer?.cancel();
     _hintTimer = Timer(_hintFor, () {
       if (mounted) setState(() => _hintShort = true);
@@ -122,21 +154,33 @@ class StandbyState extends State<Standby> with SingleTickerProviderStateMixin, W
   }
 
   void wake() {
-    if (!_standby) return;
-    _hintTimer?.cancel();
-    setState(() => _standby = false);
-    _slide.reverse();
+    if (!_standby && !_resting) return;
+    final fromStandby = _standby;
+    _resting = false;
+    if (fromStandby) {
+      _hintTimer?.cancel();
+      setState(() => _standby = false);
+      _slide.reverse();
+    }
     final back = _returnTo;
     _returnTo = null;
-    // Home lets focus in again only once it has rebuilt.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    void restore() {
       if (!mounted) return;
       if (back != null && back.context != null && back.canRequestFocus) {
         back.requestFocus();
       } else {
         FocusScope.of(context).nextFocus();
       }
-    });
+    }
+
+    // From a rest Home never let go of focus, so it goes straight back; from standby, Home
+    // lets focus in again only once it has rebuilt.
+    if (fromStandby) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => restore());
+      WidgetsBinding.instance.scheduleFrame();
+    } else {
+      restore();
+    }
     _restartIdle();
   }
 

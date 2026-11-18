@@ -77,6 +77,26 @@ void main() {
     expect(find.byType(TopInfo), findsOneWidget);
   });
 
+  testWidgets('after 30 quiet seconds focus rests, and the next press only brings it back', (tester) async {
+    await pump(tester);
+    expect(FocusManager.instance.primaryFocus, same(button));
+    await tester.pump(const Duration(seconds: 31));
+    expect(FocusManager.instance.primaryFocus, isNot(same(button)));
+    expect(tester.state<StandbyState>(find.byType(Standby)).resting, isTrue);
+    expect(inStandby(tester), isFalse, reason: 'Home stays on screen');
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+    await tester.pump(const Duration(milliseconds: 150));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus, same(button));
+    expect(homeKeys, isEmpty, reason: 'the waking press does nothing on Home');
+
+    // Resting doesn't stop standby from coming at ten minutes.
+    await tester.pump(const Duration(minutes: 11));
+    expect(inStandby(tester), isTrue);
+  });
+
   testWidgets('the first press only wakes Home, and focus goes back where it was', (tester) async {
     await pump(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp); // the home "menu" asks for standby

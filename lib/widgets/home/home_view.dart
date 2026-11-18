@@ -716,6 +716,9 @@ class HomeTile extends StatefulWidget {
   State<HomeTile> createState() => _HomeTileState();
 }
 
+/// The app tile the remote is on, if any: every other tile dims back so that one stands out.
+final ValueNotifier<String?> _focusedTile = ValueNotifier(null);
+
 class _HomeTileState extends State<HomeTile> with SingleTickerProviderStateMixin {
   late final FocusNode _focusNode = widget.focusNode ?? FocusNode();
   late Future<(bool, Uint8List)> _image;
@@ -750,6 +753,7 @@ class _HomeTileState extends State<HomeTile> with SingleTickerProviderStateMixin
 
   @override
   void dispose() {
+    if (_focusedTile.value == widget.app.packageName && _focused) _focusedTile.value = null;
     _glow.dispose();
     if (widget.focusNode == null) _focusNode.dispose();
     super.dispose();
@@ -773,7 +777,7 @@ class _HomeTileState extends State<HomeTile> with SingleTickerProviderStateMixin
         clipBehavior: Clip.none,
         children: [
           AnimatedScale(
-            scale: _pressed ? 0.96 : (lifted ? 1.12 : 1.0),
+            scale: _pressed ? 0.96 : (lifted ? 1.14 : 1.0),
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             child: AnimatedBuilder(
@@ -787,6 +791,8 @@ class _HomeTileState extends State<HomeTile> with SingleTickerProviderStateMixin
                       blurRadius: lifted ? 40 : 10,
                       offset: Offset(0, lifted ? 22 : 4),
                     ),
+                    // A soft white halo: no outline, just light, on any background.
+                    if (lifted) BoxShadow(color: Colors.white.withOpacity(0.28), blurRadius: 32, spreadRadius: 1),
                     if (widget.moving)
                       BoxShadow(
                         color: Colors.white.withOpacity(0.25 + 0.35 * Curves.easeInOut.transform(_glow.value)),
@@ -810,6 +816,18 @@ class _HomeTileState extends State<HomeTile> with SingleTickerProviderStateMixin
                       fit: StackFit.expand,
                       children: [
                         _artwork(),
+                        // Dims back while another tile has the remote, so the focused one is
+                        // the one that's lit. A dark wash, not transparency: cheap on this GPU.
+                        IgnorePointer(
+                          child: ValueListenableBuilder<String?>(
+                            valueListenable: _focusedTile,
+                            builder: (context, focusedTile, _) => AnimatedContainer(
+                              duration: const Duration(milliseconds: 220),
+                              color: Colors.black.withOpacity(
+                                  focusedTile != null && focusedTile != widget.app.packageName && !lifted ? 0.3 : 0),
+                            ),
+                          ),
+                        ),
                         // A soft light across the top-left of the focused card.
                         IgnorePointer(
                           child: AnimatedOpacity(
@@ -911,6 +929,11 @@ class _HomeTileState extends State<HomeTile> with SingleTickerProviderStateMixin
 
   void _onFocusChange(bool focused) {
     setState(() => _focused = focused);
+    if (focused) {
+      _focusedTile.value = widget.app.packageName;
+    } else if (_focusedTile.value == widget.app.packageName) {
+      _focusedTile.value = null;
+    }
     if (focused) {
       final ambience = context.read<HomeAmbience>();
       _image.then((image) {
