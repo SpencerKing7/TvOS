@@ -1,5 +1,10 @@
 [
   {
+    "version": 2,
+    "date": "2026-11-18",
+    "summary": "Home lands on the first app on wake and return; Back on Home goes to standby; DEV tag on test builds"
+  },
+  {
     "version": 1,
     "date": "2026-11-18",
     "summary": "First TvOS release: the calm home, backgrounds, standby, quick settings, smooth video"
