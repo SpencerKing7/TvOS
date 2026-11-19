@@ -66,6 +66,11 @@ class StandbyState extends State<Standby> with SingleTickerProviderStateMixin, W
   // OK to wake can't also open the app under the focus.
   LogicalKeyboardKey? _wakeKey;
 
+  /// Set by Home: puts the remote on the first pinned app, returning false if it can't (no
+  /// pinned apps, or a panel is open over Home). Waking from standby and coming back to the
+  /// TvOS app (TV on, back from an app) land there; waking from a rest does not.
+  bool Function()? landing;
+
   bool get standby => _standby;
 
   /// Focus has stepped off Home after a quiet spell.
@@ -99,7 +104,7 @@ class StandbyState extends State<Standby> with SingleTickerProviderStateMixin, W
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _restartIdle();
+      _comeBack();
     } else {
       _idle?.cancel();
       _restTimer?.cancel();
@@ -166,6 +171,7 @@ class StandbyState extends State<Standby> with SingleTickerProviderStateMixin, W
     _returnTo = null;
     void restore() {
       if (!mounted) return;
+      if (fromStandby && (landing?.call() ?? false)) return;
       if (back != null && back.context != null && back.canRequestFocus) {
         back.requestFocus();
       } else {
@@ -181,6 +187,26 @@ class StandbyState extends State<Standby> with SingleTickerProviderStateMixin, W
     } else {
       restore();
     }
+    _restartIdle();
+  }
+
+  /// TvOS is in front again: Home is up at once (no slide; the screen was off or an app had
+  /// it) and the remote lands on the first pinned app.
+  void _comeBack() {
+    final wasAway = _standby || _resting;
+    _hintTimer?.cancel();
+    _returnTo = null;
+    _resting = false;
+    if (_standby) setState(() => _standby = false);
+    _slide.value = 0;
+    // Home lets focus in again only once it has rebuilt.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final landed = landing?.call() ?? false;
+      // Focus is still on standby's own node; give it back to Home somewhere.
+      if (!landed && wasAway) FocusScope.of(context).nextFocus();
+    });
+    WidgetsBinding.instance.scheduleFrame();
     _restartIdle();
   }
 

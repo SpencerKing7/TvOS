@@ -107,6 +107,7 @@ class _HomeViewState extends State<HomeView> {
     };
     // A background picked in the panel over an app shows once Home is back.
     _lifecycle = AppLifecycleListener(onResume: () => context.read<SettingsService>().reloadHomeBackground());
+    _standby = context.findAncestorStateOfType<StandbyState>()?..landing = _landOnFirstApp;
     // Home pressed on Home: close whatever is open over it (the panel, a dialog).
     QuickPanelChannel.onHome = () {
       if (!mounted) return;
@@ -191,7 +192,7 @@ class _HomeViewState extends State<HomeView> {
       ),
     );
     _panelOpen = false;
-    if (mounted) _menuNode.requestFocus();
+    if (mounted && !_landOnFirstApp()) _menuNode.requestFocus();
   }
 
   /// One focus node per home app, so focus can be put back on a specific slot.
@@ -202,8 +203,20 @@ class _HomeViewState extends State<HomeView> {
 
   FocusNode _nodeFor(String packageName) => _homeNodes.putIfAbsent(packageName, FocusNode.new);
 
+  StandbyState? _standby;
+
+  /// Back to the top with the remote on the first pinned app, unless a panel is open over Home.
+  bool _landOnFirstApp() {
+    if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+    if (_home(context.read<AppsService>()).isEmpty) return false;
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    _focusHomeSlot(0);
+    return true;
+  }
+
   @override
   void dispose() {
+    if (_standby?.landing == _landOnFirstApp) _standby?.landing = null;
     QuickPanelChannel.onOpened = null;
     QuickPanelChannel.onHome = null;
     _lifecycle.dispose();
@@ -288,30 +301,40 @@ class _HomeViewState extends State<HomeView> {
       onUp: _menuNode.requestFocus,
     );
 
-    return SingleChildScrollView(
-      controller: _scroll,
-      physics: const ClampingScrollPhysics(),
-      clipBehavior: Clip.none,
-      padding: const EdgeInsets.symmetric(horizontal: _sidePadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // First screen: the top ~third kept for future "top content" (for now just the
-          // time), your apps in the remaining ~two-thirds, and a hint that more is below.
-          SizedBox(
-            height: screenHeight - 16,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  height: screenHeight * 0.44,
-                  // Time/date/weather sit small in the corner; the rest is free for more content.
-                  child: Stack(
-                    children: [
-                      Align(
-                        alignment: Alignment.topLeft,
-                        // Left edge on the app tiles' left edge, so the whole screen hangs off one line.
-                        child: Padding(
+    // Back that nothing on Home used (All Apps takes it to the first app; a move cancels):
+    // Home steps aside into standby.
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (_, event) {
+        if (!AppCardKeys.cancelKeys.contains(event.logicalKey)) return KeyEventResult.ignored;
+        if (event is KeyDownEvent) Standby.enter(context);
+        return KeyEventResult.handled;
+      },
+      child: SingleChildScrollView(
+        controller: _scroll,
+        physics: const ClampingScrollPhysics(),
+        clipBehavior: Clip.none,
+        padding: const EdgeInsets.symmetric(horizontal: _sidePadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // First screen: the top ~third kept for future "top content" (for now just the
+            // time), your apps in the remaining ~two-thirds, and a hint that more is below.
+            SizedBox(
+              height: screenHeight - 16,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    height: screenHeight * 0.44,
+                    // Time/date/weather sit small in the corner; the rest is free for more content.
+                    child: Stack(
+                      children: [
+                        Align(
+                          alignment: Alignment.topLeft,
+                          // Left edge on the app tiles' left edge, so the whole screen hangs off one line.
+                          child: Padding(
                             // The menu button sits out past the content margin, so a little room is enough.
                             padding: const EdgeInsets.only(top: 18, right: 24),
                             // The one-line clock over the hero spot, always; with nothing to show,
@@ -331,88 +354,89 @@ class _HomeViewState extends State<HomeView> {
                                 Expanded(child: Align(alignment: Alignment.centerLeft, child: slot)),
                               ],
                             ),
-                        ),
-                      ),
-                      Align(
-                        alignment: Alignment.topRight,
-                        // Out past the content margins, into the screen's own corner (about 20
-                        // from the top and right edges); it's a quiet utility, not a destination.
-                        child: Transform.translate(
-                          offset: const Offset(_sidePadding - 4, 4),
-                          child: _MenuButton(
-                            focusNode: _menuNode,
-                            onPressed: _showHomeMenu,
-                            onDown: () => slots.isEmpty ? _focusHomeSlot(_lastTopColumn) : _slotNode.requestFocus(),
-                            onUp: () => Standby.enter(context),
                           ),
                         ),
-                      ),
+                        Align(
+                          alignment: Alignment.topRight,
+                          // Out past the content margins, into the screen's own corner (about 20
+                          // from the top and right edges); it's a quiet utility, not a destination.
+                          child: Transform.translate(
+                            offset: const Offset(_sidePadding - 4, 4),
+                            child: _MenuButton(
+                              focusNode: _menuNode,
+                              onPressed: _showHomeMenu,
+                              onDown: () => slots.isEmpty ? _focusHomeSlot(_lastTopColumn) : _slotNode.requestFocus(),
+                              onUp: () => Standby.enter(context),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _TileGrid(
+                    columns: _homeColumns,
+                    children: [
+                      for (var i = 0; i < home.length; i++)
+                        HomeTile(
+                          key: ValueKey(home[i].packageName),
+                          app: home[i],
+                          focusNode: _nodeFor(home[i].packageName),
+                          autofocus: i == 0,
+                          // Up reaches the slot from under it and to its left, the menu from the last column.
+                          // Up reaches the card above this tile; with no cards, the menu.
+                          onUp: i < _homeColumns
+                              ? () => slots.isEmpty ? _menuNode.requestFocus() : _focusCardAbove(home[i].packageName)
+                              : null,
+                          onFocus: () {
+                            if (i < _homeColumns) _lastTopColumn = i;
+                            _scrollTo(0);
+                          },
+                          onHold: () {
+                            setState(() => _moving = home[i].packageName);
+                            context.read<HomeAmbience>().moving = true;
+                          },
+                          moving: _moving == home[i].packageName,
+                          moveArrows: _moving == home[i].packageName ? _arrowsAt(i, home.length) : const {},
+                          onMoveKey: (direction) => _move(service, home[i], home.length, direction),
+                          onMoveDone: (commit) => _endMove(service, commit),
+                          onRemove: () => _removeFromHome(service, home, i),
+                        ),
                     ],
                   ),
-                ),
-                _TileGrid(
-                  columns: _homeColumns,
-                  children: [
-                    for (var i = 0; i < home.length; i++)
-                      HomeTile(
-                        key: ValueKey(home[i].packageName),
-                        app: home[i],
-                        focusNode: _nodeFor(home[i].packageName),
-                        autofocus: i == 0,
-                        // Up reaches the slot from under it and to its left, the menu from the last column.
-                        // Up reaches the card above this tile; with no cards, the menu.
-                        onUp: i < _homeColumns
-                            ? () => slots.isEmpty ? _menuNode.requestFocus() : _focusCardAbove(home[i].packageName)
-                            : null,
-                        onFocus: () {
-                          if (i < _homeColumns) _lastTopColumn = i;
-                          _scrollTo(0);
-                        },
-                        onHold: () {
-                          setState(() => _moving = home[i].packageName);
-                          context.read<HomeAmbience>().moving = true;
-                        },
-                        moving: _moving == home[i].packageName,
-                        moveArrows: _moving == home[i].packageName ? _arrowsAt(i, home.length) : const {},
-                        onMoveKey: (direction) => _move(service, home[i], home.length, direction),
-                        onMoveDone: (commit) => _endMove(service, commit),
-                        onRemove: () => _removeFromHome(service, home, i),
-                      ),
-                  ],
-                ),
-                const Spacer(),
-                _BottomHint(moving: _moving != null),
-                const SizedBox(height: 22),
+                  const Spacer(),
+                  _BottomHint(moving: _moving != null),
+                  const SizedBox(height: 22),
+                ],
+              ),
+            ),
+            // Everything else, reached by pressing down past your apps.
+            Padding(
+              key: _allAppsHeader,
+              padding: const EdgeInsets.only(top: 40, bottom: 36),
+              child: const Text(
+                'All Apps',
+                style: TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w600),
+              ),
+            ),
+            _TileGrid(
+              columns: _allAppsColumns,
+              gap: 24,
+              children: [
+                for (var i = 0; i < everything.length; i++)
+                  HomeTile(
+                    key: ValueKey('all:${everything[i].packageName}'),
+                    app: everything[i],
+                    autofocus: home.isEmpty && i == 0,
+                    onFocus: i < _allAppsColumns ? _revealAllAppsHeader : null,
+                    onUp: i < _allAppsColumns ? () => _focusHomeSlot(_homeColumns + (i * (_homeColumns - 1) / (_allAppsColumns - 1)).round()) : null,
+                    onBack: () => _focusHomeSlot(0),
+                    onHold: () => _addToHome(service, home, everything[i]),
+                  ),
               ],
             ),
-          ),
-          // Everything else, reached by pressing down past your apps.
-          Padding(
-            key: _allAppsHeader,
-            padding: const EdgeInsets.only(top: 40, bottom: 36),
-            child: const Text(
-              'All Apps',
-              style: TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w600),
-            ),
-          ),
-          _TileGrid(
-            columns: _allAppsColumns,
-            gap: 24,
-            children: [
-              for (var i = 0; i < everything.length; i++)
-                HomeTile(
-                  key: ValueKey('all:${everything[i].packageName}'),
-                  app: everything[i],
-                  autofocus: home.isEmpty && i == 0,
-                  onFocus: i < _allAppsColumns ? _revealAllAppsHeader : null,
-                  onUp: i < _allAppsColumns ? () => _focusHomeSlot(_homeColumns + (i * (_homeColumns - 1) / (_allAppsColumns - 1)).round()) : null,
-                  onBack: () => _focusHomeSlot(0),
-                  onHold: () => _addToHome(service, home, everything[i]),
-                ),
-            ],
-          ),
-          SizedBox(height: screenHeight * 0.3),
-        ],
+            SizedBox(height: screenHeight * 0.3),
+          ],
+        ),
       ),
     );
   }

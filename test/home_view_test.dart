@@ -10,6 +10,7 @@ import 'package:flauncher/widgets/home/ambience.dart';
 import 'package:flauncher/widgets/home/home_slot.dart';
 import 'package:flauncher/widgets/home/home_view.dart';
 import 'package:flauncher/widgets/home/quick_panel.dart';
+import 'package:flauncher/widgets/home/standby.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -296,6 +297,106 @@ void main() {
       verifyNever(watch.requestPermission());
     });
   });
+  group('landing', () {
+    String? focusedApp() =>
+        FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<HomeTile>()?.app.packageName;
+    bool inStandby(WidgetTester tester) => tester.state<StandbyState>(find.byType(Standby)).standby;
+
+    // The remote's Back; the test keyboard has no physical Go Back key, and Escape is handled the same.
+    const back = LogicalKeyboardKey.escape;
+
+    Future<void> press(WidgetTester tester, LogicalKeyboardKey key) async {
+      await tester.sendKeyEvent(key);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Back on Home goes to standby, and waking lands on the first app', (tester) async {
+      await _pumpHome(tester, standby: true);
+      expect(focusedApp(), _pinned[0]);
+      await press(tester, LogicalKeyboardKey.arrowRight);
+      await press(tester, LogicalKeyboardKey.arrowRight);
+      expect(focusedApp(), _pinned[2]);
+
+      await press(tester, back);
+      expect(inStandby(tester), isTrue);
+
+      await press(tester, LogicalKeyboardKey.enter);
+      expect(inStandby(tester), isFalse);
+      expect(focusedApp(), _pinned[0]);
+    });
+
+    testWidgets('Back in All Apps returns to the first app, not standby', (tester) async {
+      await _pumpHome(tester, standby: true);
+      await press(tester, LogicalKeyboardKey.arrowDown);
+      await press(tester, LogicalKeyboardKey.arrowDown);
+      await press(tester, LogicalKeyboardKey.arrowRight);
+      expect(focusedApp(), isNot(_pinned[0]));
+
+      await press(tester, back);
+      expect(inStandby(tester), isFalse);
+      expect(focusedApp(), _pinned[0]);
+    });
+
+    testWidgets('coming back to TvOS (TV on, back from an app) lands on the first app, top of the page', (tester) async {
+      await _pumpHome(tester, standby: true);
+      await press(tester, LogicalKeyboardKey.arrowDown);
+      await press(tester, LogicalKeyboardKey.arrowDown);
+      await press(tester, LogicalKeyboardKey.arrowDown);
+      await press(tester, LogicalKeyboardKey.arrowRight);
+      final scroll = tester.widget<SingleChildScrollView>(find.byType(SingleChildScrollView).first).controller!;
+      expect(scroll.offset, greaterThan(0));
+
+      for (final state in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pump();
+      for (final state in [AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pumpAndSettle();
+      expect(focusedApp(), _pinned[0]);
+      expect(scroll.offset, 0);
+    });
+
+    testWidgets('coming back while in standby brings Home up on the first app', (tester) async {
+      await _pumpHome(tester, standby: true);
+      await press(tester, LogicalKeyboardKey.arrowRight);
+      await press(tester, back);
+      expect(inStandby(tester), isTrue);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(inStandby(tester), isFalse);
+      expect(focusedApp(), _pinned[0]);
+    });
+
+    testWidgets('a quiet spell keeps the place', (tester) async {
+      await _pumpHome(tester, standby: true);
+      await press(tester, LogicalKeyboardKey.arrowRight);
+      await tester.pump(const Duration(seconds: 31));
+      expect(focusedApp(), isNull);
+
+      await press(tester, LogicalKeyboardKey.enter);
+      expect(focusedApp(), _pinned[1]);
+    });
+
+    testWidgets('closing the settings panel lands on the first app', (tester) async {
+      await _pumpHome(tester, standby: true);
+      await press(tester, LogicalKeyboardKey.arrowRight);
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+          'tvos/quick_panel', const StandardMethodCodec().encodeMethodCall(const MethodCall('opened')), (_) {});
+      await tester.pumpAndSettle();
+      expect(find.byType(QuickPanel), findsOneWidget);
+      expect(focusedApp(), isNull);
+
+      await tester.binding.handlePopRoute(); // Back, as the panel receives it
+      await tester.pumpAndSettle();
+      expect(find.byType(QuickPanel), findsNothing);
+      expect(focusedApp(), _pinned[0]);
+      expect(inStandby(tester), isFalse);
+    });
+  });
 }
 
 /// Pumps Home with mocked services, returning the Watch Next and settings mocks to check against.
@@ -303,7 +404,8 @@ Future<(MockWatchNextService, MockSettingsService)> _pumpHome(WidgetTester teste
     {Stream<dynamic> nowPlaying = const Stream.empty(),
     double pixelRatio = 2.0,
     List<WatchNextProgram> watching = const [],
-    bool watchNextAsked = true}) async {
+    bool watchNextAsked = true,
+    bool standby = false}) async {
   tester.view.physicalSize = const Size(1920, 1080);
   tester.view.devicePixelRatio = pixelRatio;
   addTearDown(tester.view.reset);
@@ -320,6 +422,7 @@ Future<(MockWatchNextService, MockSettingsService)> _pumpHome(WidgetTester teste
   when(settings.homeBackground).thenReturn('video');
   when(settings.watchNextAsked).thenReturn(watchNextAsked);
   when(settings.setWatchNextAsked()).thenAnswer((_) async {});
+  when(settings.reloadHomeBackground()).thenAnswer((_) async {});
   final watch = MockWatchNextService();
   when(watch.hasPermission).thenReturn(true);
   when(watch.programs).thenReturn(watching);
@@ -340,7 +443,7 @@ Future<(MockWatchNextService, MockSettingsService)> _pumpHome(WidgetTester teste
       ChangeNotifierProvider<NowPlayingService>.value(value: music),
       ChangeNotifierProvider<WatchNextService>.value(value: watch),
     ],
-    child: const MaterialApp(home: Scaffold(body: HomeView())),
+    child: MaterialApp(home: Scaffold(body: standby ? const Standby(child: HomeView()) : const HomeView())),
   ));
   await tester.pump(const Duration(seconds: 1));
   return (watch, settings);
